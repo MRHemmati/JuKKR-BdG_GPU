@@ -11,6 +11,10 @@
 !------------------------------------------------------------------------------------
 module mod_sll_global_solutions
 
+#if defined(__NVCOMPILER) || defined(__PGI)
+#define NO_QUADPREC 1
+#endif
+
 contains
 
   !-------------------------------------------------------------------------------
@@ -65,6 +69,7 @@ contains
     ! cmodesll ="1" : op( )=identity
     ! cmodesll ="T" : op( )=transpose in L
  
+#ifndef NO_QUADPREC
     complex*32, allocatable :: qcllp(:, :, :), qdllp(:, :, :)
     complex*32, allocatable :: qmihvy(:, :), qmihvz(:, :), qmijvy(:, :), qmijvz(:, :)
     complex*32, allocatable :: qyif(:, :, :)
@@ -72,6 +77,7 @@ contains
     complex*32, allocatable :: qsll(:, :)
     complex*32, allocatable :: qcone, qczero
     complex*32, allocatable :: qbetainv(:, :), qbetainv_save(:, :)
+#endif
 
     complex (kind=dp) :: sll(lmsize2, lmsize, nrmax), & ! irr. volterra sol.
       vll(lmsize*nvec, lmsize*nvec, nrmax) ! potential term in 5.7
@@ -218,6 +224,7 @@ contains
     call zgetrf(lmsize, lmsize, betainv, lmsize, ipiv, info)
     call zgetri(lmsize, betainv, lmsize, ipiv, work, lmsize*lmsize, info)
  
+#ifndef NO_QUADPREC
     if(use_cheby_quadprec) then
       allocate (qcone, qczero)
       qcone = (1.q0,0.0q0)
@@ -231,6 +238,7 @@ contains
       allocate (qcllptemp(lmsize,lmsize), qdllptemp(lmsize,lmsize))
       qbetainv = betainv
     end if
+#endif
 
     do iter_beta = 1, niter_beta
 
@@ -269,7 +277,7 @@ contains
     end do
 
     else
-
+#ifndef NO_QUADPREC
     qdllp(:, :, npan) = qbetainv
     qcllp(:, :, npan) = qczero
 
@@ -304,6 +312,9 @@ contains
       if(abs(dllpval).gt.dllpmax) dllpmax = abs(dllpval)
       end do
     end do
+#else
+      stop '[sll-glob] Quad precision not supported in this build'
+#endif
     end if
  
     ! test writeout
@@ -341,7 +352,7 @@ contains
     end do
    
     else
-
+#ifndef NO_QUADPREC
     do ipan = 0, npan
        do lm1 = 1, lmsize
         qdllp(lm1,lm1,ipan) = qdllp(lm1,lm1,ipan) + qcone
@@ -369,6 +380,9 @@ contains
 
       end do
     end do
+#else
+      stop '[sll-glob] Quad precision not supported in this build'
+#endif
     end if
  
     if (idotime==1) call timing_stop('afterlocal')
@@ -381,12 +395,15 @@ contains
 
     deallocate (work, betainv, betainv_save, cllp, dllp, cllptemp, dllptemp, mihvy, mihvz, mijvy, mijvz, yif, zif, stat=ierror)
     if (ierror/=0) stop '[sll-glob] ERROR in deallocating arrays'
+#ifndef NO_QUADPREC
     if(use_cheby_quadprec) deallocate (qbetainv, qbetainv_save, qcllp, qdllp, qcllptemp, qdllptemp, qmihvy, qmihvz, qmijvy, qmijvz, qyif, qsll, stat=ierror)
     if (ierror/=0) stop '[sll-glob] ERROR in deallocating arrays'
+#endif
   end subroutine sll_global_solutions
 
 end module mod_sll_global_solutions
 
+#ifndef NO_QUADPREC
       SUBROUTINE CQGEMM (M, N, K, ALPHA, A, LDA, B, LDB, BETA, C, LDC )
       IMPLICIT NONE
 !     .. Scalar Arguments ..
@@ -442,3 +459,4 @@ end module mod_sll_global_solutions
    90       CONTINUE
       RETURN
       END
+#endif
