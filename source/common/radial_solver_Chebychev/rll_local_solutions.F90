@@ -140,9 +140,19 @@ contains
       tau(0:ncheb), &              ! Radial mesh point
       slc1sum(0:ncheb), taucslcr, tau_icheb
     complex (kind=dp) :: gf_tau_icheb
+    complex (kind=dp) :: tmp_nvy, tmp_jvy, tmp_nvz, tmp_jvz
 
     integer :: ipiv(0:ncheb, lmsize2)
     integer :: use_sratrick
+
+    if (cmoderll/='1' .and. cmoderll/='T') then
+      stop '[rll-loc] mode not known'
+    end if
+
+    ! GPU: enter OpenACC data region
+    !$acc data copyin(tau, jlk_index, jlk2, vll, hlk2, jlk, hlk, cslc1, slc1sum) &
+    !$acc copy(yrf, zrf, mrnvy, mrnvz, mrjvy, mrjvz) &
+    !$acc create(vjlr, vhlr, yrll, zrll, yrll1, zrll1, yrll2, zrll2, slv, slv1, jlmkmn, hlmkmn, yrll1temp, zrll1temp, vhlr_yrll1, vhlr_zrll1, vjlr_yrll1, vjlr_zrll1, zslc1sum)
 
     if (lmsize==1) then
       use_sratrick = 0
@@ -152,6 +162,8 @@ contains
 
     ! initialization
 
+    ! GPU: array initialization on GPU
+    !$acc kernels
     vhlr = czero
     vjlr = czero
 
@@ -164,6 +176,7 @@ contains
       yrll2 = czero
       zrll2 = czero
     end if
+    !$acc end kernels
 
     ! ---------------------------------------------------------------------
     ! 1. prepare VJLR, VNL, VHLR, which appear in the integrands
@@ -181,6 +194,8 @@ contains
 
     ! i.e. prepare terms kappa*J*DV, kappa*H*DV appearing in 5.11, 5.12.
 
+    ! GPU: Setup vjlr and vhlr loops
+    !$acc parallel loop private(mn, tau_icheb, gf_tau_icheb, l1, l2)
     do icheb = 0, ncheb
       mn = ipan*ncheb + ipan - icheb
       tau_icheb = tau(icheb)
@@ -197,7 +212,7 @@ contains
             end do
           end do
         end do
-      else if (cmoderll=='T') then ! transposed matrix (might not be needed anymore)
+      else ! cmoderll=='T'
         do ivec2 = 1, nvec
           do lm2 = 1, lmsize
             do ivec = 1, nvec
@@ -209,8 +224,6 @@ contains
             end do
           end do
         end do                     ! nvec
-      else
-        stop '[rll-loc] mode not known'
       end if
 
       ! calculation of the J (and H) matrix according to equation 5.69 (2nd eq.)
@@ -236,6 +249,8 @@ contains
 
     ! calculation of A in 5.68
     if (use_sratrick==0) then
+      ! GPU: setup slv kernel matrix
+      !$acc parallel loop collapse(2) private(taucslcr, mn, lm1, l1)
       do icheb2 = 0, ncheb
         do icheb = 0, ncheb
           taucslcr = tau(icheb)*cslc1(icheb, icheb2)*drpan2
@@ -251,12 +266,16 @@ contains
           end do
         end do
       end do
+      ! GPU: add diagonal identity
+      !$acc parallel loop collapse(2)
       do lm1 = 1, lmsize2
         do icheb = 0, ncheb
           slv(icheb, lm1, icheb, lm1) = slv(icheb, lm1, icheb, lm1) + 1.0_dp
         end do
       end do
     else if (use_sratrick==1) then
+      ! GPU: setup jlmkmn and hlmkmn
+      !$acc parallel loop collapse(2) private(taucslcr, mn, l1)
       do icheb2 = 0, ncheb
         do icheb = 0, ncheb
           taucslcr = tau(icheb)*cslc1(icheb, icheb2)*drpan2
@@ -269,11 +288,15 @@ contains
         end do
       end do
 
+      ! GPU: call svpart in parallel
+      !$acc parallel loop collapse(2)
       do lm2 = 1, lmsize
         do icheb2 = 0, ncheb
           call svpart(slv1(0,1,icheb2,lm2), jlmkmn(0,1,icheb2), hlmkmn(0,1,icheb2), vhlr(1,lm2,icheb2), vjlr(1,lm2,icheb2), ncheb, lmsize)
         end do
       end do
+      ! GPU: add diagonal identity
+      !$acc parallel loop collapse(2)
       do lm1 = 1, lmsize
         do icheb = 0, ncheb
           slv1(icheb, lm1, icheb, lm1) = slv1(icheb, lm1, icheb, lm1) + 1.0_dp
@@ -344,8 +367,9 @@ contains
       stop '[rll-loc] error in inversion'
     end if
 
-    ! Reorient indices for later use
+    ! GPU: Reorient indices for later use on GPU
     if (use_sratrick==0) then
+      !$acc parallel loop collapse(3)
       do icheb = 0, ncheb
         do lm2 = 1, lmsize
           do lm1 = 1, lmsize2
@@ -356,7 +380,7 @@ contains
       end do
 
     else if (use_sratrick==1) then
-
+      !$acc parallel loop collapse(3)
       do icheb = 0, ncheb
         do lm2 = 1, lmsize
           do lm1 = 1, lmsize
@@ -370,22 +394,35 @@ contains
 
     end if
 
-    ! Calculation of eq. 5.19-5.22
-
+    ! GPU: Setup zslc1sum and perform local matrix multiplication reductions on GPU
+    !$acc parallel loop
     do icheb = 0, ncheb
       zslc1sum(icheb) = slc1sum(icheb)*drpan2
     end do
-    call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(0), vhlr(1,1,0), lmsize, yrf(1,1,0), lmsize2, czero, mrnvy, lmsize)
-    call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(0), vjlr(1,1,0), lmsize, yrf(1,1,0), lmsize2, czero, mrjvy, lmsize)
-    call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(0), vhlr(1,1,0), lmsize, zrf(1,1,0), lmsize2, czero, mrnvz, lmsize)
-    call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(0), vjlr(1,1,0), lmsize, zrf(1,1,0), lmsize2, czero, mrjvz, lmsize)
-    do icheb = 1, ncheb
-      call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(icheb), vhlr(1,1,icheb), lmsize, yrf(1,1,icheb), lmsize2, cone, mrnvy, lmsize)
-      call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(icheb), vjlr(1,1,icheb), lmsize, yrf(1,1,icheb), lmsize2, cone, mrjvy, lmsize)
-      call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(icheb), vhlr(1,1,icheb), lmsize, zrf(1,1,icheb), lmsize2, cone, mrnvz, lmsize)
-      call zgemm('n', 'n', lmsize, lmsize, lmsize2, zslc1sum(icheb), vjlr(1,1,icheb), lmsize, zrf(1,1,icheb), lmsize2, cone, mrjvz, lmsize)
+
+    !$acc parallel loop collapse(2) private(tmp_nvy, tmp_jvy, tmp_nvz, tmp_jvz, lm3, icheb)
+    do lm2 = 1, lmsize
+      do lm1 = 1, lmsize
+        tmp_nvy = czero
+        tmp_jvy = czero
+        tmp_nvz = czero
+        tmp_jvz = czero
+        do icheb = 0, ncheb
+          do lm3 = 1, lmsize2
+            tmp_nvy = tmp_nvy + zslc1sum(icheb) * vhlr(lm1, lm3, icheb) * yrf(lm3, lm2, icheb)
+            tmp_jvy = tmp_jvy + zslc1sum(icheb) * vjlr(lm1, lm3, icheb) * yrf(lm3, lm2, icheb)
+            tmp_nvz = tmp_nvz + zslc1sum(icheb) * vhlr(lm1, lm3, icheb) * zrf(lm3, lm2, icheb)
+            tmp_jvz = tmp_jvz + zslc1sum(icheb) * vjlr(lm1, lm3, icheb) * zrf(lm3, lm2, icheb)
+          end do
+        end do
+        mrnvy(lm1, lm2) = tmp_nvy
+        mrjvy(lm1, lm2) = tmp_jvy
+        mrnvz(lm1, lm2) = tmp_nvz
+        mrjvz(lm1, lm2) = tmp_jvz
+      end do
     end do
 
+    !$acc end data
   end subroutine rll_local_solutions
 
 

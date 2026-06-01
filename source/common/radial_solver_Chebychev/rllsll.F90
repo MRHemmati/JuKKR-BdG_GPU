@@ -595,6 +595,7 @@ contains
     end do                       ! ipan
 #ifdef CPP_HYBRID
     !$omp end do
+#endif
 
     if (use_sratrick==0) then
       deallocate (slv, srv)
@@ -603,6 +604,8 @@ contains
     end if
 
     deallocate (yill, zill, yrll, zrll, vjlr, vhlr, vjli, vhli)
+
+#ifdef CPP_HYBRID
     !$omp end parallel
 #endif
     ! end the big loop over the subintervals
@@ -657,17 +660,26 @@ contains
       call zgemm('n', 'n', lmsize, lmsize, lmsize, -cone, mijvy(1,1,ipan), lmsize, dllp(1,1,ipan), lmsize, cone, dllp(1,1,ipan-1), lmsize)
     end do
 
-    ! ***********************************************************************
-    ! determine the regular solution ull by using 5.14
-    ! and the irregular solution sll accordingly
-    ! ***********************************************************************
+    ! GPU: enter OpenACC data region
+    !$acc data copyin(yrf, zrf, yif, zif, allp, bllp, cllp, dllp) copy(ull, sll, rll)
+
+    ! GPU: calculate regular/irregular solutions ull/sll on GPU
+    !$acc parallel loop collapse(3) private(mn)
     do ipan = 1, npan
       do icheb = 0, ncheb
-        mn = ipan*ncheb + ipan - icheb
-        call zgemm('n', 'n', lmsize2, lmsize, lmsize, cone, yrf(1,1,icheb,ipan), lmsize2, allp(1,1,ipan-1), lmsize, czero, ull(1,1,mn), lmsize2)
-        call zgemm('n', 'n', lmsize2, lmsize, lmsize, cone, zrf(1,1,icheb,ipan), lmsize2, bllp(1,1,ipan-1), lmsize, cone, ull(1,1,mn), lmsize2)
-        call zgemm('n', 'n', lmsize2, lmsize, lmsize, cone, zif(1,1,icheb,ipan), lmsize2, cllp(1,1,ipan), lmsize, czero, sll(1,1,mn), lmsize2)
-        call zgemm('n', 'n', lmsize2, lmsize, lmsize, cone, yif(1,1,icheb,ipan), lmsize2, dllp(1,1,ipan), lmsize, cone, sll(1,1,mn), lmsize2)
+        do lm2 = 1, lmsize
+          mn = ipan*ncheb + ipan - icheb
+          do lm1 = 1, lmsize2
+            ull(lm1, lm2, mn) = czero
+            sll(lm1, lm2, mn) = czero
+            do lm3 = 1, lmsize
+              ull(lm1, lm2, mn) = ull(lm1, lm2, mn) + yrf(lm1, lm3, icheb, ipan) * allp(lm3, lm2, ipan-1) &
+                                                    + zrf(lm1, lm3, icheb, ipan) * bllp(lm3, lm2, ipan-1)
+              sll(lm1, lm2, mn) = sll(lm1, lm2, mn) + zif(lm1, lm3, icheb, ipan) * cllp(lm3, lm2, ipan) &
+                                                    + yif(lm1, lm3, icheb, ipan) * dllp(lm3, lm2, ipan)
+            end do
+          end do
+        end do
       end do
     end do
 
@@ -680,6 +692,7 @@ contains
     ! and the t-matrix is calculated
     ! ***********************************************************************
 
+    !$acc update host(allp(1:lmsize, 1:lmsize, npan))
     call zgetrf(lmsize, lmsize, allp(1,1,npan), lmsize, ipiv, info) ! invert alpha
     call zgetri(lmsize, allp(1,1,npan), lmsize, ipiv, work, lmsize*lmsize, info) ! invert alpha -> transformation matrix rll=alpha^-1*rll
     ! get alpha matrix
@@ -692,9 +705,20 @@ contains
     call zgemm('n', 'n', lmsize, lmsize, lmsize, cone/gmatprefactor, bllp(1,1,npan), & ! calc t-matrix tll = bll*alpha^-1
       lmsize, allp(1,1,npan), lmsize, czero, tllp, lmsize)
 
+    !$acc update device(allp(1:lmsize, 1:lmsize, npan), ull)
+    ! GPU: convert volterra to fredholm solution on GPU
+    !$acc parallel loop collapse(3)
     do nm = 1, nrmax
-      call zgemm('n', 'n', lmsize2, lmsize, lmsize, cone, ull(1,1,nm), lmsize2, allp(1,1,npan), lmsize, czero, rll(1,1,nm), lmsize2)
+      do lm2 = 1, lmsize
+        do lm1 = 1, lmsize2
+          rll(lm1, lm2, nm) = czero
+          do lm3 = 1, lmsize
+            rll(lm1, lm2, nm) = rll(lm1, lm2, nm) + ull(lm1, lm3, nm) * allp(lm3, lm2, npan)
+          end do
+        end do
+      end do
     end do
+    !$acc end data
 
     if (idotime==1) call timing_stop('endstuff')
     if (idotime==1) call timing_start('checknan')
@@ -704,7 +728,7 @@ contains
     if (idotime==1) call timing_stop('local3')
     if (idotime==1) call timing_stop('rllsll')
 
-    deallocate (work, allp, bllp, cllp, dllp, mrnvy, mrnvz, mrjvy, mrjvz, mihvy, mihvz, mijvy, mijvz, yif, yrf, zif, zrf, stat=ierror)
+    deallocate (work, allp, bllp, cllp, dllp, mrnvy, mrnvz, mrjvy, mrjvz, mihvy, mihvz, mijvy, mijvz, yif, yrf, zif, zrf, ull, stat=ierror)
     if (ierror/=0) stop '[rllsll] ERROR in deallocating arrays'
   end subroutine rllsll
 

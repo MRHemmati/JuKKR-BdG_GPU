@@ -97,7 +97,7 @@ elseif(CMAKE_Fortran_COMPILER_ID MATCHES GNU)
 
     # standard compiler flags
     #set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none -fdefault-real-8 -fimplicit-none")
-    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none -fmax-stack-var-size=0 -fallow-argument-mismatch")
 
     # debug flags # -finit-local-zero
     set(CMAKE_Fortran_FLAGS_DEBUG "-O0 -g3 -fcheck=all -fbacktrace -Wall -Wextra -mtune=native")
@@ -179,5 +179,18 @@ if(USE_LIBFLAME)
         set(LAPACK_LIBRARIES "-qopenmp ${LAPACK_LIBRARIES}")
     elseif(CMAKE_Fortran_COMPILER_ID MATCHES GNU)
         set(LAPACK_LIBRARIES "-fopenmp ${LAPACK_LIBRARIES}")
+    endif()
+endif()
+
+# GPU: configure compiler flags for OpenACC offloading
+if(ENABLE_GPU)
+    if(CMAKE_Fortran_COMPILER_ID MATCHES "NVHPC" OR CMAKE_Fortran_COMPILER_ID MATCHES "PGI" OR CMAKE_Fortran_COMPILER_ID MATCHES "NVIDIA" OR CMAKE_Fortran_COMPILER_ID MATCHES "Flang")
+        message("NVIDIA compiler found. Enabling OpenACC offloading (-acc).")
+        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -acc -Minfo=accel")
+    elseif(CMAKE_Fortran_COMPILER_ID MATCHES GNU)
+        message("GNU compiler found. Enabling OpenACC offloading (-fopenacc).")
+        set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fopenacc")
+    else()
+        message(WARNING "GPU offloading requested but compiler is not NVIDIA or GNU. OpenACC flags may not be set correctly.")
     endif()
 endif()

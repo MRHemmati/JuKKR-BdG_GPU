@@ -29,6 +29,8 @@ option(ENABLE_PATCH_INTEL "Use patch to make MKL think it works on intel hardwar
 option(ENABLE_MPI "Enable MPI parallelization" ON)
 option(ENABLE_OMP "Enable OpenMP parallelization" OFF)
 option(ENABLE_OMP_EVERYWHERE "Add openmp compile flags everywhere" OFF)
+option(ENABLE_GPU "Enable GPU offloading using OpenACC" OFF)
+
 
 
 # default values of codes to compile:

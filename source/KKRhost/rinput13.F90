@@ -928,7 +928,8 @@ contains
 
     ! read in starting value of Delta
     if (kBdG/=0) then
-      call ioinput('delta_BdG       ', uio, 1, 7, ier)
+      call ioinput('<DELTA_BDG>     ', uio, 1, 7, ier)
+      if (ier/=0) call ioinput('delta_BdG       ', uio, 1, 7, ier)
       if (ier==0) then
         read (unit=uio, fmt=*, iostat=ier) delta_BdG
         if (ier/=0) stop 'Error reading `delta_BdG`: check your inputcard'

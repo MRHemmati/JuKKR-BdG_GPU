@@ -103,20 +103,28 @@ contains
     lrecgrf = wlength*4*naclsmax*lmgf0d*lmgf0d*ncls
 
     ! allocate and initialize ginp
-    allocate (ginp(naclsmax*lmgf0d,lmgf0d,ncls), stat=i_stat)
-    call memocc(i_stat, product(shape(ginp))*kind(ginp), 'GINP', 'TBREF')
+    if (.not. allocated(ginp)) then
+      allocate (ginp(naclsmax*lmgf0d,lmgf0d,ncls), stat=i_stat)
+      call memocc(i_stat, product(shape(ginp))*kind(ginp), 'GINP', 'TBREF')
+    end if
     ginp = czero
-    allocate (dginp_dum(naclsmax*lmgf0d,lmgf0d), stat=i_stat)
-    call memocc(i_stat, product(shape(dginp_dum))*kind(dginp_dum), 'dginp_dum', 'TBREF')
+    if (.not. allocated(dginp_dum)) then
+      allocate (dginp_dum(naclsmax*lmgf0d,lmgf0d), stat=i_stat)
+      call memocc(i_stat, product(shape(dginp_dum))*kind(dginp_dum), 'dginp_dum', 'TBREF')
+    end if
     dginp_dum = czero
 
     if (lly/=0) then
       ! allocate and initialize dginp and lly_g0tr
-      allocate (dginp(naclsmax*lmgf0d,lmgf0d,ncls), stat=i_stat)
-      call memocc(i_stat, product(shape(dginp))*kind(dginp), 'DGINP', 'TBREF')
+      if (.not. allocated(dginp)) then
+        allocate (dginp(naclsmax*lmgf0d,lmgf0d,ncls), stat=i_stat)
+        call memocc(i_stat, product(shape(dginp))*kind(dginp), 'DGINP', 'TBREF')
+      end if
       dginp = czero
-      allocate (lly_g0tr(ielast,nclsd), stat=i_stat)
-      call memocc(i_stat, product(shape(lly_g0tr))*kind(lly_g0tr), 'LLY_G0TR', 'TBREF')
+      if (.not. allocated(lly_g0tr)) then
+        allocate (lly_g0tr(ielast,nclsd), stat=i_stat)
+        call memocc(i_stat, product(shape(lly_g0tr))*kind(lly_g0tr), 'LLY_G0TR', 'TBREF')
+      end if
       lly_g0tr = czero
     end if
 
@@ -317,17 +325,27 @@ contains
 
     if (lly/=0 .and. t_lloyd%dgref_to_file) close (681)
     if (lly/=0 .and. t_lloyd%g0tr_to_file) close (682)
-    i_all = -product(shape(ginp))*kind(ginp)
-    deallocate (ginp, stat=i_stat)
-    call memocc(i_stat, i_all, 'GINP', 'TBREF')
+    if (allocated(ginp)) then
+      i_all = -product(shape(ginp))*kind(ginp)
+      deallocate (ginp, stat=i_stat)
+      call memocc(i_stat, i_all, 'GINP', 'TBREF')
+    end if
+    if (allocated(dginp_dum)) then
+      i_all = -product(shape(dginp_dum))*kind(dginp_dum)
+      deallocate (dginp_dum, stat=i_stat)
+      call memocc(i_stat, i_all, 'dginp_dum', 'TBREF')
+    end if
     if (lly/=0) then
-      i_all = -product(shape(dginp))*kind(dginp)
-      deallocate (dginp, stat=i_stat)
-      call memocc(i_stat, i_all, 'DGINP', 'TBREF')
-
-      i_all = -product(shape(lly_g0tr))*kind(lly_g0tr)
-      deallocate (lly_g0tr, stat=i_stat)
-      call memocc(i_stat, i_all, 'LLY_G0TR', 'TBREF')
+      if (allocated(dginp)) then
+        i_all = -product(shape(dginp))*kind(dginp)
+        deallocate (dginp, stat=i_stat)
+        call memocc(i_stat, i_all, 'DGINP', 'TBREF')
+      end if
+      if (allocated(lly_g0tr)) then
+        i_all = -product(shape(lly_g0tr))*kind(lly_g0tr)
+        deallocate (lly_g0tr, stat=i_stat)
+        call memocc(i_stat, i_all, 'LLY_G0TR', 'TBREF')
+      end if
     end if
 
   end subroutine tbref

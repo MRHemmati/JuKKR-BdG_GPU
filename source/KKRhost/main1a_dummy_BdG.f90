@@ -65,7 +65,8 @@ subroutine main1a_dummy
 
   write (*, *) 'start reading BdG-inputs from inputcard ...'
 
-  call ioinput('use_BdG         ', uio, 1, 7, ier)
+  call ioinput('<USE_BDG>       ', uio, 1, 7, ier)
+  if (ier/=0) call ioinput('use_BdG         ', uio, 1, 7, ier)
   if (ier==0) then
     read (unit=uio, fmt=*) use_bdg
     write (*, *) 'use_BdG= ', use_bdg
@@ -73,7 +74,8 @@ subroutine main1a_dummy
     stop '[main1a_dummy] error "use_BdG" not found in inputcard'
   end if
 
-  call ioinput('delta_BdG       ', uio, 1, 7, ier)
+  call ioinput('<DELTA_BDG>     ', uio, 1, 7, ier)
+  if (ier/=0) call ioinput('delta_BdG       ', uio, 1, 7, ier)
   if (ier==0) then
     read (unit=uio, fmt=*) delta_bdg
     write (*, *) 'delta_BdG= ', delta_bdg

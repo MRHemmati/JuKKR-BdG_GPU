@@ -398,7 +398,8 @@ contains
   !> This subroutine facilitates compile optimization by working witt only two-dimensional arrays
   !-------------------------------------------------------------------------------
   subroutine svpart(srv1, jlmkmn, hlmkmn, vhli, vjli, ncheb, lmsize)
-
+    ! GPU: mark as sequential routine for device offloading
+    !$acc routine seq
     use :: mod_datatypes, only: dp
 
     implicit none
