@@ -20,7 +20,7 @@ contains
   subroutine dlke0(gllke, alat, naez, cls, nacls, naclsmax, rr, ezoa, atom, bzkp, rcls, ginp)
 
     use :: mod_runoptions, only: calc_complex_bandstructure, symmetrize_gmat, use_deci_onebulk
-    use :: global_variables, only: lmgf0d, almgf0, naclsd, nrd
+    use :: global_variables, only: lmgf0d, almgf0, naclsd, nrd, nclsd, nembd2
     use :: mod_datatypes, only: dp
     use :: mod_constants, only: ci
     implicit none
@@ -56,7 +56,13 @@ contains
       kp(6) = (0.0_dp, 0.0_dp)
     end if
 
-    !$acc parallel loop collapse(3) copyin(kp, rr, ezoa, atom, cls, nacls, rcls, ginp) copy(gllke) private(ic, arg, tt, eikr, im, am)
+    !$acc parallel loop collapse(3) &
+    !$acc& copyin(kp(1:6)) &
+    !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
+    !$acc&         cls(1:nembd2), nacls(1:nclsd), rcls(1:3, 1:naclsd, 1:nclsd), &
+    !$acc&         ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
+    !$acc& copy(gllke(1:almgf0, 1:almgf0)) &
+    !$acc& private(ic, arg, tt, eikr, im, am)
     do i = 1, naez
       do m = 1, naclsmax
         do lm2 = 1, lmgf0d
@@ -104,7 +110,13 @@ contains
         kp(6) = -bzkp(6)
       end if
 
-      !$acc parallel loop collapse(3) copyin(kp, rr, ezoa, atom, cls, nacls, rcls, ginp) copy(gllke1) private(ic, arg, tt, eikr, im, am)
+      !$acc parallel loop collapse(3) &
+      !$acc& copyin(kp(1:6)) &
+      !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
+      !$acc&         cls(1:nembd2), nacls(1:nclsd), rcls(1:3, 1:naclsd, 1:nclsd), &
+      !$acc&         ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
+      !$acc& copy(gllke1(1:almgf0, 1:almgf0)) &
+      !$acc& private(ic, arg, tt, eikr, im, am)
       do i = 1, naez
         do m = 1, naclsmax
           do lm2 = 1, lmgf0d
@@ -139,7 +151,7 @@ contains
         end do
       end do
 
-      !$acc parallel loop collapse(2) copy(gllke) copyin(gllke1)
+      !$acc parallel loop collapse(2) copy(gllke(1:almgf0, 1:almgf0)) copyin(gllke1(1:almgf0, 1:almgf0))
       do j = 1, naez
         do i = 1, naez
           do lm2 = 1, lmgf0d
