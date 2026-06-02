@@ -132,11 +132,6 @@ contains
         deallocate (ntcell, stat=i_stat)
         call memocc(i_stat, i_all, 'NTCELL', 'allocate_cell')
       end if
-      if (allocated(ntcell)) then
-        i_all = -product(shape(ntcell))*kind(ntcell)
-        deallocate (ntcell, stat=i_stat)
-        call memocc(i_stat, i_all, 'NTCELL', 'allocate_cell')
-      end if
       if (allocated(rmtref)) then
         i_all = -product(shape(rmtref))*kind(rmtref)
         deallocate (rmtref, stat=i_stat)
@@ -166,6 +161,11 @@ contains
         i_all = -product(shape(rmtnew))*kind(rmtnew)
         deallocate (rmtnew, stat=i_stat)
         call memocc(i_stat, i_all, 'RMTNEW', 'allocate_cell')
+      end if
+      if (allocated(mtfac)) then
+        i_all = -product(shape(mtfac))*kind(mtfac)
+        deallocate (mtfac, stat=i_stat)
+        call memocc(i_stat, i_all, 'MTFAC', 'allocate_cell')
       end if
       if (allocated(imt)) then
         i_all = -product(shape(imt))*kind(imt)
@@ -201,6 +201,16 @@ contains
         i_all = -product(shape(fpradius))*kind(fpradius)
         deallocate (fpradius, stat=i_stat)
         call memocc(i_stat, i_all, 'FPRADIUS', 'allocate_cell')
+      end if
+      if (allocated(cls)) then
+        i_all = -product(shape(cls))*kind(cls)
+        deallocate (cls, stat=i_stat)
+        call memocc(i_stat, i_all, 'CLS', 'allocate_cell')
+      end if
+      if (allocated(rbasis)) then
+        i_all = -product(shape(rbasis))*kind(rbasis)
+        deallocate (rbasis, stat=i_stat)
+        call memocc(i_stat, i_all, 'RBASIS', 'allocate_cell')
       end if
     end if
 
@@ -388,6 +398,16 @@ contains
         i_all = -product(shape(visp))*kind(visp)
         deallocate (visp, stat=i_stat)
         call memocc(i_stat, i_all, 'VISP', 'allocate_potential')
+      end if
+      if (allocated(ecore)) then
+        i_all = -product(shape(ecore))*kind(ecore)
+        deallocate (ecore, stat=i_stat)
+        call memocc(i_stat, i_all, 'ECORE', 'allocate_potential')
+      end if
+      if (allocated(ncore)) then
+        i_all = -product(shape(ncore))*kind(ncore)
+        deallocate (ncore, stat=i_stat)
+        call memocc(i_stat, i_all, 'NCORE', 'allocate_potential')
       end if
 
     end if

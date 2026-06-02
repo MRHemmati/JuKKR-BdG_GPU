@@ -730,16 +730,6 @@ contains
     if (write_lloyd_dgref_file .or. write_lloyd_file) t_lloyd%dgref_to_file = .true.
     if (write_lloyd_g0tr_file .or. write_lloyd_file) t_lloyd%g0tr_to_file = .true.
 
-    ! set verbosity level in t_inc%i_write = 0,1,2 for default, verbose1, verbose2
-    t_inc%i_write = 0                   ! default: write only output.000.txt and reset file after each iteration
-    if (verbosity==2) t_inc%i_write = 1 ! write on all processors but only the latest iteration
-    if (verbosity==3) t_inc%i_write = 2 ! write everything
-    ! and t_inc_i_time for timing writeout
-    t_inc%i_time = 1               ! default: only timings from master, all iterations
-    if (verbosity==1) t_inc%i_time = 0 ! only timings from master, only the last iteration
-    if (verbosity==3) t_inc%i_time = 2 ! all timing files, all iterations
-    ! writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags
-
     !--------------------------------------------------------------------------------
     ! MPI communication scheme
     !--------------------------------------------------------------------------------
@@ -859,6 +849,15 @@ contains
       npnt2,npnt3,ebotsemi,emusemi,tksemi,npolsemi,n1semi,n2semi,n3semi,iemxd,      &
       t_params)
 
+    ! set verbosity level in t_inc%i_write = 0,1,2 for default, verbose1, verbose2
+    t_inc%i_write = 0                   ! default: write only output.000.txt and reset file after each iteration
+    if (verbosity==2) t_inc%i_write = 1 ! write on all processors but only the latest iteration
+    if (verbosity==3) t_inc%i_write = 2 ! write everything
+    ! and t_inc_i_time for timing writeout
+    t_inc%i_time = 1               ! default: only timings from master, all iterations
+    if (verbosity==1) t_inc%i_time = 0 ! only timings from master, only the last iteration
+    if (verbosity==3) t_inc%i_time = 2 ! all timing files, all iterations
+    ! writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags writeout flags
 
   end subroutine wunfiles
 
@@ -1026,7 +1025,7 @@ contains
     allocate (t_params%ecorerel(t_params%krel*20+(1-t_params%krel),t_params%npotd), stat=i_stat)
     call memocc(i_stat, product(shape(t_params%ecorerel))*kind(t_params%ecorerel), 't_params%ECOREREL', 'init_t_params')
     allocate (t_params%rclsimp(3,t_params%natomimpd), stat=i_stat) ! real (kind=dp)
-    call memocc(i_stat, product(shape(t_params%rclsimp))*kind(t_params%rclsimp), 't_params%ECOREREL', 'init_t_params')
+    call memocc(i_stat, product(shape(t_params%rclsimp))*kind(t_params%rclsimp), 't_params%RCLSIMP', 'init_t_params')
     if (.not. allocated(t_params%theta)) then
       allocate (t_params%theta(t_params%natyp), stat=i_stat) ! real (kind=dp)
       call memocc(i_stat, product(shape(t_params%theta))*kind(t_params%theta), 't_params%THETA', 'init_t_params')
@@ -1055,7 +1054,7 @@ contains
     allocate (t_params%lcore(20,t_params%npotd), stat=i_stat)
     call memocc(i_stat, product(shape(t_params%lcore))*kind(t_params%lcore), 't_params%LCORE', 'init_t_params')
     allocate (t_params%ncore(t_params%npotd), stat=i_stat)
-    call memocc(i_stat, product(shape(t_params%npotd))*kind(t_params%npotd), 't_params%NPOTD', 'init_t_params')
+    call memocc(i_stat, product(shape(t_params%ncore))*kind(t_params%ncore), 't_params%NCORE', 'init_t_params')
     allocate (t_params%ipan(t_params%natyp), stat=i_stat)
     call memocc(i_stat, product(shape(t_params%ipan))*kind(t_params%ipan), 't_params%IPAN', 'init_t_params')
     allocate (t_params%ircut(0:t_params%ipand,t_params%natyp), stat=i_stat)
@@ -1153,7 +1152,7 @@ contains
     allocate (t_params%npan_eq_at(t_params%natyp), stat=i_stat)
     call memocc(i_stat, product(shape(t_params%npan_eq_at))*kind(t_params%npan_eq_at), 't_params%NPAN_EQ_AT', 'init_t_params')
     allocate (t_params%npan_tot(t_params%natyp), stat=i_stat)
-    call memocc(i_stat, product(shape(t_params%npan_tot))*kind(t_params%npan_tot), 't_params%NPAN_EQ_AT', 'init_t_params')
+    call memocc(i_stat, product(shape(t_params%npan_tot))*kind(t_params%npan_tot), 't_params%NPAN_TOT', 'init_t_params')
     allocate (t_params%ipan_intervall(0:t_params%ntotd,t_params%natyp), stat=i_stat)
     call memocc(i_stat, product(shape(t_params%ipan_intervall))*kind(t_params%ipan_intervall), 't_params%IPAN_INTERVALL', 'init_t_params')
     allocate (t_params%nkcore(20,t_params%natyp), stat=i_stat)
@@ -2277,8 +2276,17 @@ contains
     t_params%vref = vref
     t_params%cleb = cleb
     t_params%rcls = rcls
+    if (allocated(t_params%socscl)) then
+      call memocc(0, -product(shape(t_params%socscl))*kind(t_params%socscl), 't_params%SOCSCL', 'wunfiles_realloc')
+    end if
     t_params%socscl = socscl
+    call memocc(0, product(shape(t_params%socscl))*kind(t_params%socscl), 't_params%SOCSCL', 'wunfiles_realloc')
+
+    if (allocated(t_params%cscl)) then
+      call memocc(0, -product(shape(t_params%cscl))*kind(t_params%cscl), 't_params%CSCL', 'wunfiles_realloc')
+    end if
     t_params%cscl = cscl
+    call memocc(0, product(shape(t_params%cscl))*kind(t_params%cscl), 't_params%CSCL', 'wunfiles_realloc')
     t_params%rbasis = rbasis
     t_params%rr = rr
     t_params%conc = conc

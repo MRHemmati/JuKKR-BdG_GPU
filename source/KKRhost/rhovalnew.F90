@@ -353,7 +353,7 @@ contains
     call memocc(i_stat, product(shape(den))*kind(den), 'DEN', 'RHOVALNEW')
     den(:,:,:,:) = czero
     allocate (denlm(lmmax0d,ielast,1,nspin/(nspin-korbit)), stat=i_stat)
-    call memocc(i_stat, product(shape(den))*kind(den), 'DENLM', 'RHOVALNEW')
+    call memocc(i_stat, product(shape(denlm))*kind(denlm), 'DENLM', 'RHOVALNEW')
     denlm(:,:,:,:) = czero
 
     rho2ns = 0.0_dp                  ! fivos 19.7.2014, this was CZERO
@@ -401,7 +401,7 @@ contains
       allocate (den(0:lmaxd1,ielast,nqdos,nspin/(nspin-korbit)), stat=i_stat) ! qdos ruess
       call memocc(i_stat, product(shape(den))*kind(den), 'DEN', 'RHOVALNEW') ! qdos ruess
       allocate (denlm(lmmax0d,ielast,nqdos,nspin/(nspin-korbit)), stat=i_stat) ! qdos ruess
-      call memocc(i_stat, product(shape(denlm))*kind(qvec), 'DENLM', 'RHOVALNEW') ! qdos ruess
+      call memocc(i_stat, product(shape(denlm))*kind(denlm), 'DENLM', 'RHOVALNEW') ! qdos ruess
 100   if (ierr/=0) stop 'ERROR READING ''qvec.dat''' ! qdos ruess
     end if                         ! use_qdos                                                     ! qdos ruess
 
@@ -1182,9 +1182,10 @@ contains
     call memocc(i_stat, i_all, 'VNSPLL0', 'RHOVALNEW')
     i_all = -product(shape(vnspll1))*kind(vnspll1)
     deallocate (vnspll1, stat=i_stat)
+    call memocc(i_stat, i_all, 'VNSPLL1', 'RHOVALNEW')
     i_all = -product(shape(vnspll2))*kind(vnspll2)
     deallocate (vnspll2, stat=i_stat)
-    call memocc(i_stat, i_all, 'VNSPLL1', 'RHOVALNEW')
+    call memocc(i_stat, i_all, 'VNSPLL2', 'RHOVALNEW')
     i_all = -product(shape(vnspll))*kind(vnspll)
     deallocate (vnspll, stat=i_stat)
     call memocc(i_stat, i_all, 'VNSPLL', 'RHOVALNEW')

@@ -42,6 +42,7 @@ program kkrcode
     allocate_green, allocate_ldau_potential, allocate_rel_transformations, allocate_semi_inf_host
   use :: mod_version_info, only: version_print_header, construct_serialnr
   use :: mod_wunfiles, only: t_params, init_t_params
+  use :: mod_bfield, only: deallocate_bfield, bfield
   use :: mod_main1a, only: main1a
   use :: mod_main1b, only: main1b
   use :: mod_main1c, only: main1c
@@ -55,7 +56,7 @@ program kkrcode
     dsymll, dsymll1, ecore, erefldau, ez, ezoa, fpradius, gsh, hostimp, icheck, icleb, icpa, ifunm, ifunm1, ijtabcalc, ijtabcalc_i, &
     ijtabsh, ijtabsym, ilm_map, imaxsh, imt, inipol, iofgij, ipan, ipan_intervall, iqat, iqcalc, irc, ircut, irm, irmin, irns, irrel, &
     irshift, irws, ish, jsh, ititle, itldau, ixipol, jeff, jend, jofgij, jwsrel, kaoez, kfg, kmesh, lcore, lefttinvll, llmsp, lmax, &
-    lmpot, lmsp, lmsp1, lmxc, loflm, lopt, mtfac, nacls, naez, natyp, ncheb, ncore, nemb, nfu, noq, npan_eq_at, npan_log_at, nref, &
+    lmpot, lmsp, lmsp1, lmxc, loflm, lopt, lambda_xc, mtfac, nacls, naez, natyp, ncheb, ncore, nemb, nfu, noq, npan_eq_at, npan_log_at, nref, &
     nshell, ntcell, nsh1, nsh2, nrrel, npan_tot, phildau, qmgam, qmgamtab, qmphi, qmphitab, qmtet, qmtettab, r2drdirel, ratom, rbasis, &
     rc, rcls, rclsimp, refpot, righttinvll, rmesh, rmtnew, rmtrefat, rnew, rpan_intervall, rr, rrel, rrot, rs, rws, s, rmt, rmtref, &
     socscale, socscl, srrel, thesme, thetas, thetasnew, tleft, tright, rmrel, uldau, vins, visp, vref, vtrel, wez, wg, wldau, &
@@ -706,7 +707,7 @@ program kkrcode
   call memocc(i_stat, i_all, 't_params%IFUNM', 'main_all')
   i_all = -product(shape(t_params%llmsp))*kind(t_params%llmsp)
   deallocate (t_params%llmsp, stat=i_stat)
-  call memocc(i_stat, i_all, 't_params%LLSMP', 'main_all')
+  call memocc(i_stat, i_all, 't_params%LLMSP', 'main_all')
   i_all = -product(shape(t_params%irmin))*kind(t_params%irmin)
   deallocate (t_params%irmin, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%IRMIN', 'main_all')
@@ -752,6 +753,11 @@ program kkrcode
   i_all = -product(shape(t_params%socscl))*kind(t_params%socscl)
   deallocate (t_params%socscl, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%SOCSCL', 'main_all')
+  if (allocated(t_params%lambda_xc)) then
+    i_all = -product(shape(t_params%lambda_xc))*kind(t_params%lambda_xc)
+    deallocate (t_params%lambda_xc, stat=i_stat)
+    call memocc(i_stat, i_all, 't_params%LAMBDA_XC', 'main_all')
+  end if
   i_all = -product(shape(t_params%rbasis))*kind(t_params%rbasis)
   deallocate (t_params%rbasis, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%RBASIS', 'main_all')
@@ -797,6 +803,11 @@ program kkrcode
   i_all = -product(shape(t_params%rclsimp))*kind(t_params%rclsimp)
   deallocate (t_params%rclsimp, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%RCLSIMP', 'main_all')
+  if (allocated(t_params%qdos_atomselect)) then
+    i_all = -product(shape(t_params%qdos_atomselect))*kind(t_params%qdos_atomselect)
+    deallocate (t_params%qdos_atomselect, stat=i_stat)
+    call memocc(i_stat, i_all, 't_params%qdos_atomselect', 'main_all')
+  end if
   i_all = -product(shape(t_params%mvevief))*kind(t_params%mvevief)
   deallocate (t_params%mvevief, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%MVEVIEF', 'main_all')
@@ -865,7 +876,7 @@ program kkrcode
   call memocc(i_stat, i_all, 't_params%LEFTTINVLL', 'main_all')
   i_all = -product(shape(t_params%righttinvll))*kind(t_params%righttinvll)
   deallocate (t_params%righttinvll, stat=i_stat)
-  call memocc(i_stat, i_all, 't_params%RIGHTTTINVLL', 'main_all')
+  call memocc(i_stat, i_all, 't_params%RIGHTTINVLL', 'main_all')
   i_all = -product(shape(t_params%npan_log_at))*kind(t_params%npan_log_at)
   deallocate (t_params%npan_log_at, stat=i_stat)
   call memocc(i_stat, i_all, 't_params%NPAN_LOG_AT', 'main_all')
@@ -965,6 +976,43 @@ program kkrcode
   call allocate_green(-1,naez,iemxd,ngshd,nsheld,lmpot,nofgij,ish,jsh,kmesh,imaxsh, &
     iqcalc,iofgij,jofgij,ijtabsh,ijtabsym,ijtabcalc,ijtabcalc_i,ilm_map,gsh)
   ! End of deallocation
+
+  if (myrank == master) then
+    if (allocated(lambda_xc)) then
+      i_all = -product(shape(lambda_xc))*kind(lambda_xc)
+      deallocate (lambda_xc, stat=i_stat)
+      call memocc(i_stat, i_all, 'LAMBDA_XC', 'main_all')
+    end if
+  end if
+
+  if (allocated(t_mpi_c_grid%ntot_pt1)) then
+    i_all = -product(shape(t_mpi_c_grid%ntot_pt1))*kind(t_mpi_c_grid%ntot_pt1)
+    deallocate (t_mpi_c_grid%ntot_pt1, stat=i_stat)
+    call memocc(i_stat, i_all, 't_mpi_c_grid%ntot_pT1', 'main_all')
+  end if
+  if (allocated(t_mpi_c_grid%ioff_pt1)) then
+    i_all = -product(shape(t_mpi_c_grid%ioff_pt1))*kind(t_mpi_c_grid%ioff_pt1)
+    deallocate (t_mpi_c_grid%ioff_pt1, stat=i_stat)
+    call memocc(i_stat, i_all, 't_mpi_c_grid%ioff_pT1', 'main_all')
+  end if
+  if (allocated(t_mpi_c_grid%ntot_pt2)) then
+    i_all = -product(shape(t_mpi_c_grid%ntot_pt2))*kind(t_mpi_c_grid%ntot_pt2)
+    deallocate (t_mpi_c_grid%ntot_pt2, stat=i_stat)
+    call memocc(i_stat, i_all, 't_mpi_c_grid%ntot_pT2', 'main_all')
+  end if
+  if (allocated(t_mpi_c_grid%ioff_pt2)) then
+    i_all = -product(shape(t_mpi_c_grid%ioff_pt2))*kind(t_mpi_c_grid%ioff_pt2)
+    deallocate (t_mpi_c_grid%ioff_pt2, stat=i_stat)
+    call memocc(i_stat, i_all, 't_mpi_c_grid%ioff_pT2', 'main_all')
+  end if
+
+  if (allocated(t_inc%kmesh_ie)) then
+    i_all = -product(shape(t_inc%kmesh_ie))*kind(t_inc%kmesh_ie)
+    deallocate (t_inc%kmesh_ie, stat=i_stat)
+    call memocc(i_stat, i_all, 't_inc%kmesh_ie', 'main_all')
+  end if
+
+  call deallocate_bfield(bfield)
 
   ! print memory report to stdout
   if (t_inc%i_write>0) call memocc(0, 0, 'count', 'stop')

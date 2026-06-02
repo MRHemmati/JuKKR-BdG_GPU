@@ -696,6 +696,48 @@ contains
               
   end subroutine calc_thetallmat
 
+  subroutine deallocate_bfield(bfield)
+    implicit none
+    type(type_bfield), intent(inout) :: bfield
+    integer :: i_stat, i_all
+
+    if (allocated(bfield%theta)) then
+      i_all = -product(shape(bfield%theta))*kind(bfield%theta)
+      deallocate (bfield%theta, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%theta', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%phi)) then
+      i_all = -product(shape(bfield%phi))*kind(bfield%phi)
+      deallocate (bfield%phi, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%phi', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%bfield)) then
+      i_all = -product(shape(bfield%bfield))*kind(bfield%bfield)
+      deallocate (bfield%bfield, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%bfield', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%bfield_strength)) then
+      i_all = -product(shape(bfield%bfield_strength))*kind(bfield%bfield_strength)
+      deallocate (bfield%bfield_strength, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%bfield_strength', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%bfield_constr)) then
+      i_all = -product(shape(bfield%bfield_constr))*kind(bfield%bfield_constr)
+      deallocate (bfield%bfield_constr, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%bfield_constr', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%mag_torque)) then
+      i_all = -product(shape(bfield%mag_torque))*kind(bfield%mag_torque)
+      deallocate (bfield%mag_torque, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%mag_torque', 'deallocate_bfield')
+    end if
+    if (allocated(bfield%thetallmat)) then
+      i_all = -product(shape(bfield%thetallmat))*kind(bfield%thetallmat)
+      deallocate (bfield%thetallmat, stat=i_stat)
+      call memocc(i_stat, i_all, 'bfield%thetallmat', 'deallocate_bfield')
+    end if
+  end subroutine deallocate_bfield
+
 end module mod_bfield
 
 

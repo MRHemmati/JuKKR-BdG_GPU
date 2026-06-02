@@ -271,6 +271,11 @@ contains
     mythread = 0
 #endif
 
+    !$acc data copyin(bzkp(1:3, 1:nofks), rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
+    !acc&            atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
+    !acc&            rcls(1:3, 1:naclsd, 1:nclsd), ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
+    !acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd))
+
     ! kpts loop
     do kpt = k_start, k_end
       gllke(:, :) = czero
@@ -649,6 +654,7 @@ contains
       end if                       ! mythread==0
 
     end do                         ! KPT = 1,NOFKS   end K-points loop
+    !$acc end data
 100 format ('                 |')  ! status bar
 110 format ('|')                   ! status bar
     ! $omp critical

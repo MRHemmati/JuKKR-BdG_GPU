@@ -1050,7 +1050,7 @@ contains
       call memocc(i_stat, i_all, 'VNSPLL1', 'allocate_locals_tmat_newsolver')
       i_all = -product(shape(vnspll2))*kind(vnspll2)
       deallocate (vnspll2, stat=i_stat)
-      call memocc(i_stat, i_all, 'VNSPLL1', 'allocate_locals_tmat_newsolver')
+      call memocc(i_stat, i_all, 'VNSPLL2', 'allocate_locals_tmat_newsolver')
 
       i_all = -product(shape(hlk))*kind(hlk)
       deallocate (hlk, stat=i_stat)

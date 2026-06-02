@@ -26,7 +26,9 @@ contains
     use :: mod_rhoqtools, only: rhoq_write_kmesh
     use :: mod_datatypes, only: dp
     use :: mod_bzirr3d, only: bzirr3d
+    use :: mod_profiling, only: memocc
     implicit none
+    integer :: i_stat
     real (kind=dp), parameter :: eps = 1.0e-12_dp
     ! ..
     ! .. Scalar Arguments ..
@@ -100,10 +102,19 @@ contains
     t_inc%nkmesh = maxmesh
     t_params%kpoibz = kpoibz
     t_params%maxmesh = maxmesh
-    allocate (t_inc%kmesh(maxmesh))
-    allocate (t_params%bzkp(3,kpoibz,maxmesh), t_params%volcub(kpoibz,maxmesh), t_params%volbz(maxmesh), t_params%nofks(maxmesh))
+    allocate (t_inc%kmesh(maxmesh), stat=i_stat)
+    call memocc(i_stat, product(shape(t_inc%kmesh))*kind(t_inc%kmesh), 't_inc%kmesh', 'bzkmesh')
+    allocate (t_params%bzkp(3,kpoibz,maxmesh), stat=i_stat)
+    call memocc(i_stat, product(shape(t_params%bzkp))*kind(t_params%bzkp), 't_params%BZKP', 'bzkmesh')
+    allocate (t_params%volcub(kpoibz,maxmesh), stat=i_stat)
+    call memocc(i_stat, product(shape(t_params%volcub))*kind(t_params%volcub), 't_params%VOLCUB', 'bzkmesh')
+    allocate (t_params%volbz(maxmesh), stat=i_stat)
+    call memocc(i_stat, product(shape(t_params%volbz))*kind(t_params%volbz), 't_params%VOLBZ', 'bzkmesh')
+    allocate (t_params%nofks(maxmesh), stat=i_stat)
+    call memocc(i_stat, product(shape(t_params%nofks))*kind(t_params%nofks), 't_params%NOFKS', 'bzkmesh')
     ! needed for wavefunction saving
-    allocate (t_inc%kmesh_ie(ielast))
+    allocate (t_inc%kmesh_ie(ielast), stat=i_stat)
+    call memocc(i_stat, product(shape(t_inc%kmesh_ie))*kind(t_inc%kmesh_ie), 't_inc%kmesh_ie', 'bzkmesh')
     t_inc%kmesh_ie = kmesh(1:ielast)
     ! LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
     do l = 1, maxmesh

@@ -1528,6 +1528,7 @@ contains
   subroutine reduce_array_size(nref, nrefd, rmtref, vref, ncls, nclsd, nacls, rcls)
 
     use mod_datatypes, only: dp
+    use :: mod_profiling, only: memocc
 
     implicit none
 
@@ -1568,11 +1569,22 @@ contains
     nclsd = ncls
 
     ! Reallocate arrays
+    ! Log deallocations first
+    call memocc(0, -product(shape(rmtref))*kind(rmtref), 'RMTREF', 'reduce_array_size')
+    call memocc(0, -product(shape(vref))*kind(vref), 'VREF', 'reduce_array_size')
+    call memocc(0, -product(shape(nacls))*kind(nacls), 'NACLS', 'reduce_array_size')
+    call memocc(0, -product(shape(rcls))*kind(rcls), 'RCLS', 'reduce_array_size')
+
     deallocate (rmtref, vref, nacls, rcls, stat=i_stat)
+
     allocate(rmtref(nrefd),stat=i_stat)
+    call memocc(i_stat, product(shape(rmtref))*kind(rmtref), 'RMTREF', 'reduce_array_size')
     allocate(vref(nrefd),stat=i_stat)
+    call memocc(i_stat, product(shape(vref))*kind(vref), 'VREF', 'reduce_array_size')
     allocate(nacls(nclsd),stat=i_stat)
+    call memocc(i_stat, product(shape(nacls))*kind(nacls), 'NACLS', 'reduce_array_size')
     allocate(rcls(3,naclsd,nclsd),stat=i_stat)
+    call memocc(i_stat, product(shape(rcls))*kind(rcls), 'RCLS', 'reduce_array_size')
 
     ! copy value from temp arrays
     rmtref(:) = rmtref_temp(1:nref)

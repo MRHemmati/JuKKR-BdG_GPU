@@ -2942,6 +2942,11 @@ contains
       call memocc(i_stat, i_all, 'IMANSOC', 'rinput13')
     end if
 
+    if (allocated(isp)) then
+      i_all = -product(shape(isp))*kind(isp)
+      deallocate (isp, stat=i_stat)
+      call memocc(i_stat, i_all, 'ISP', 'rinput13')
+    end if
 
     return
     !--------------------------------------------------------------------------------

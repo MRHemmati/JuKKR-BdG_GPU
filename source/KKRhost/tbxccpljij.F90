@@ -162,6 +162,7 @@ contains
 
       allocate (nijcalc(nshell(0)), jijdone(natyp,natyp,nshell(0)), stat=lm1)
       call memocc(lm1, product(shape(nijcalc))*kind(nijcalc), 'nijcalc', 'tbxccpljij')
+      call memocc(lm1, product(shape(jijdone))*kind(jijdone), 'jijdone', 'tbxccpljij')
       if (lm1/=0) then
         write (6, 110) 'JIJDONE/NIJCALC'
         stop
