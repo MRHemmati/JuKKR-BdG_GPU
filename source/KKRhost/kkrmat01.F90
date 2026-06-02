@@ -272,9 +272,9 @@ contains
 #endif
 
     !$acc data copyin(bzkp(1:3, 1:nofks), rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
-    !acc&            atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
-    !acc&            rcls(1:3, 1:naclsd, 1:nclsd), ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd))
+    !$acc&            atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
+    !$acc&            rcls(1:3, 1:naclsd, 1:nclsd), ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
+    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd))
 
     ! kpts loop
     do kpt = k_start, k_end
