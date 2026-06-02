@@ -968,7 +968,7 @@ contains
     i_all = -product(shape(vxcnm))*kind(vxcnm)
     deallocate (vxcnm, stat=i_stat)
     call memocc(i_stat, i_all, 'vxcnm', 'main2')
-    i_all = -product(shape(thetas))*kind(thetas)
+    i_all = -product(shape(r2nef))*kind(r2nef)
     deallocate (r2nef, stat=i_stat)
     call memocc(i_stat, i_all, 'R2NEF', 'main2')
     i_all = -product(shape(rho2ns))*kind(rho2ns)
@@ -977,8 +977,8 @@ contains
     i_all = -product(shape(rho2nsnm))*kind(rho2nsnm)
     deallocate (rho2nsnm, stat=i_stat)
     call memocc(i_stat, i_all, 'RHO2NSNM', 'main2')
+    i_all = -product(shape(vons))*kind(vons)
     deallocate (vons, stat=i_stat)
-    i_all = product(shape(vons))*kind(vons)
     call memocc(i_stat, i_all, 'VONS', 'main2')
 
   end subroutine main2

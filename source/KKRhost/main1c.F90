@@ -959,7 +959,7 @@ contains
     complex (kind=dp), dimension (:), allocatable, intent(inout) :: cdosat1
     complex (kind=dp), dimension (:, :), allocatable, intent(inout) :: cdos_lly
     integer, intent(out) :: nqdos
-    integer :: i_stat, i1, iq
+    integer :: i_stat, i1, iq, i_all
 
     if (allocmode==1) then
 
@@ -1014,38 +1014,51 @@ contains
     else ! allocmode/=1
 
       if (use_qdos) then
+        i_all = -product(shape(qvec))*kind(qvec)
         deallocate (qvec, stat=i_stat)
-        call memocc(i_stat, -product(shape(qvec))*kind(qvec), 'QVEC', 'main1c')
+        call memocc(i_stat, i_all, 'QVEC', 'main1c')
       end if
 
+      i_all = -product(shape(rho2n1))*kind(rho2n1)
       deallocate (rho2n1, stat=i_stat)
-      call memocc(i_stat, -product(shape(rho2n1))*kind(rho2n1), 'RHO2N1', 'main1c')
+      call memocc(i_stat, i_all, 'RHO2N1', 'main1c')
+      i_all = -product(shape(rho2n2))*kind(rho2n2)
       deallocate (rho2n2, stat=i_stat)
-      call memocc(i_stat, -product(shape(rho2n2))*kind(rho2n2), 'RHO2N2', 'main1c')
+      call memocc(i_stat, i_all, 'RHO2N2', 'main1c')
+      i_all = -product(shape(rho2ns))*kind(rho2ns)
       deallocate (rho2ns, stat=i_stat)
-      call memocc(i_stat, -product(shape(rho2ns))*kind(rho2ns), 'RHO2NS', 'main1c')
+      call memocc(i_stat, i_all, 'RHO2NS', 'main1c')
+      i_all = -product(shape(r2nef))*kind(r2nef)
       deallocate (r2nef, stat=i_stat)
-      call memocc(i_stat, -product(shape(r2nef))*kind(r2nef), 'R2NEF', 'main1c')
+      call memocc(i_stat, i_all, 'R2NEF', 'main1c')
 
       if (lly/=0) then
+        i_all = -product(shape(cdos0))*kind(cdos0)
         deallocate (cdos0, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdos0))*kind(cdos0), 'CDOS0', 'main1c')
+        call memocc(i_stat, i_all, 'CDOS0', 'main1c')
+        i_all = -product(shape(cdos1))*kind(cdos1)
         deallocate (cdos1, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdos1))*kind(cdos1), 'CDOS1', 'main1c')
+        call memocc(i_stat, i_all, 'CDOS1', 'main1c')
+        i_all = -product(shape(cdos2))*kind(cdos2)
         deallocate (cdos2, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdos2))*kind(cdos2), 'CDOS2', 'main1c')
+        call memocc(i_stat, i_all, 'CDOS2', 'main1c')
+        i_all = -product(shape(cdosat0))*kind(cdosat0)
         deallocate (cdosat0, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdosat0))*kind(cdosat0), 'CDOSAT0', 'main1c')
+        call memocc(i_stat, i_all, 'CDOSAT0', 'main1c')
+        i_all = -product(shape(cdosat1))*kind(cdosat1)
         deallocate (cdosat1, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdosat1))*kind(cdosat1), 'CDOSAT1', 'main1c')
+        call memocc(i_stat, i_all, 'CDOSAT1', 'main1c')
+        i_all = -product(shape(cdos_lly))*kind(cdos_lly)
         deallocate (cdos_lly, stat=i_stat)
-        call memocc(i_stat, -product(shape(cdos_lly))*kind(cdos_lly), 'CDOS_LLY', 'main1c')
+        call memocc(i_stat, i_all, 'CDOS_LLY', 'main1c')
       end if ! LLY<>0
 
+      i_all = -product(shape(den))*kind(den)
       deallocate (den, stat=i_stat)
-      call memocc(i_stat, -product(shape(den))*kind(den), 'DEN', 'main1c')
+      call memocc(i_stat, i_all, 'DEN', 'main1c')
+      i_all = -product(shape(denlm))*kind(denlm)
       deallocate (denlm, stat=i_stat)
-      call memocc(i_stat, -product(shape(denlm))*kind(denlm), 'DENLM', 'main1c')
+      call memocc(i_stat, i_all, 'DENLM', 'main1c')
 
     end if ! allocmode
 
