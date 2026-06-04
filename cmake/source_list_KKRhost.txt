@@ -422,6 +422,13 @@ if(ENABLE_GPU)
     set_target_properties(kkr.x PROPERTIES LINKER_LANGUAGE Fortran)
     # Link C++ standard library since we have a C++ wrapper target
     target_link_libraries(kkr.x PRIVATE stdc++)
+    
+    # Configure dynamic linking search paths (RPATH) for CUDA libraries
+    set_target_properties(kkr.x PROPERTIES
+        INSTALL_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+        BUILD_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+        INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
 endif()
 
 if(ENABLE_BdG)
@@ -438,5 +445,10 @@ if(ENABLE_BdG)
     if(ENABLE_GPU)
         set_target_properties(kkr_BdG_radial.x PROPERTIES LINKER_LANGUAGE Fortran)
         target_link_libraries(kkr_BdG_radial.x PRIVATE stdc++)
+        set_target_properties(kkr_BdG_radial.x PROPERTIES
+            INSTALL_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+            BUILD_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+            INSTALL_RPATH_USE_LINK_PATH TRUE
+        )
     endif()
 endif()
