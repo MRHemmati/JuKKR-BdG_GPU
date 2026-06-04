@@ -433,7 +433,13 @@ if(ENABLE_GPU)
     set_target_properties(kkr.x PROPERTIES
         INSTALL_RPATH "${gpu_rpaths}"
         BUILD_RPATH "${gpu_rpaths}"
+        BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
+    # Force linker options to ensure RPATH is embedded regardless of global CMake settings
+    target_link_options(kkr.x PRIVATE 
+        "-Wl,-rpath,/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/cuda/12.2/lib64"
+        "-Wl,-rpath,/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/compilers/lib"
     )
 endif()
 
@@ -454,7 +460,12 @@ if(ENABLE_BdG)
         set_target_properties(kkr_BdG_radial.x PROPERTIES
             INSTALL_RPATH "${gpu_rpaths}"
             BUILD_RPATH "${gpu_rpaths}"
+            BUILD_WITH_INSTALL_RPATH TRUE
             INSTALL_RPATH_USE_LINK_PATH TRUE
+        )
+        target_link_options(kkr_BdG_radial.x PRIVATE 
+            "-Wl,-rpath,/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/cuda/12.2/lib64"
+            "-Wl,-rpath,/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/compilers/lib"
         )
     endif()
 endif()
