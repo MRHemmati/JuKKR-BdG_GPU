@@ -271,10 +271,26 @@ contains
     mythread = 0
 #endif
 
-    !$acc data copyin(bzkp(1:3, 1:nofks), rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
-    !$acc&            atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
-    !$acc&            rcls(1:3, 1:naclsd, 1:nclsd), ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd))
+    !$acc data copyin(bzkp(1:3, 1:nofks), &
+    !$acc&            ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
+    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
+    !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) &
+    !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
+    !$acc&         atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
+    !$acc&         rcls(1:3, 1:naclsd, 1:nclsd)) &
+    !$acc& create(rrm(1:3, 0:nrd))
+
+    ! Pre-compute rrm = -rr on the GPU (rr already resident from main1b data region)
+    !$acc parallel loop collapse(2) present(rr(1:3, 0:nrd), rrm(1:3, 0:nrd))
+    do i = 1, 3
+      do j = 1, nrd
+        rrm(i, j) = -rr(i, j)
+      end do
+    end do
+    !$acc parallel loop present(rrm(1:3, 0:nrd))
+    do i = 1, 3
+      rrm(i, 0) = 0.0_dp
+    end do
 
     ! kpts loop
     do kpt = k_start, k_end
@@ -319,9 +335,8 @@ contains
       if (mythread==0 .and. t_inc%i_time>0) call timing_start('main1b - fourier')
 #endif
 
-      rrm(1:3, 0) = 0.0_dp ! second index of rr and rrm start at 0
-      rrm(1:3, 1:nrd) = -rr(1:3, 1:nrd)
-      ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      ! (rrm is now pre-computed on GPU before the k-loop, no CPU assignment needed)
+      ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! KREL .EQ. 0/1
       ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       if (krel==0) then
@@ -473,6 +488,8 @@ contains
       ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       if (.not. use_virtual_atoms) then
         ! $omp single
+        ! Offload tinvll subtraction to GPU (gllke already on device from dlke0)
+        !$acc parallel loop collapse(3) present(gllke(1:alm, 1:alm), tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) private(il1, il2)
         do i1 = 1, naez
           do lm1 = 1, lmmaxd
             do lm2 = 1, lmmaxd

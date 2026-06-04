@@ -471,7 +471,12 @@ contains
 
     ! ----------------------------------------------------------------------
     ! BEGIN do loop over spins and energies
+    ! Static geometry arrays that never change across spin/energy/k-points:
+    ! upload once here and keep resident on GPU for the entire calculation.
     ! ----------------------------------------------------------------------
+    !$acc data copyin(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd), &
+    !$acc&            atom(1:naclsd, 1:nembd), cls(1:nembd), nacls(1:nclsd), &
+    !$acc&            rcls(1:3, 1:naclsd, 1:nclsd))
     do ispin = 1, nspin1
 
       do ie_num = 1, ie_end
@@ -832,6 +837,7 @@ contains
       end if
 
     end do                         ! ISPIN = 1,NSPIN1
+    !$acc end data   ! end of persistent GPU data region for static geometry arrays
     ! -------------------------------------------------------------------------
     ! END of do loop over spins and energies
     ! -------------------------------------------------------------------------

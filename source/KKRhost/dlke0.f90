@@ -57,8 +57,8 @@ contains
     end if
 
     !$acc parallel loop collapse(3) &
-    !$acc& copyin(kp(1:6), rr(1:3, 0:nrd)) &
-    !$acc& present(ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
+    !$acc& copyin(kp(1:6)) &
+    !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
     !$acc&         cls(1:nembd2), nacls(1:nclsd), rcls(1:3, 1:naclsd, 1:nclsd), &
     !$acc&         ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
     !$acc& copy(gllke(1:almgf0, 1:almgf0)) &
@@ -111,8 +111,8 @@ contains
       end if
 
       !$acc parallel loop collapse(3) &
-      !$acc& copyin(kp(1:6), rr(1:3, 0:nrd)) &
-      !$acc& present(ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
+      !$acc& copyin(kp(1:6)) &
+      !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), atom(1:naclsd, 1:nembd2), &
       !$acc&         cls(1:nembd2), nacls(1:nclsd), rcls(1:3, 1:naclsd, 1:nclsd), &
       !$acc&         ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
       !$acc& copy(gllke1(1:almgf0, 1:almgf0)) &
