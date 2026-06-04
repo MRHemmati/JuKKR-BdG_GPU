@@ -339,7 +339,8 @@ contains
 
     !$acc data copyin(bzkp(1:3, 1:nofks), &
     !$acc&            ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
+    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
+    !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) &
     !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
     !$acc&         atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
     !$acc&         rcls(1:3, 1:naclsd, 1:nclsd)) &
