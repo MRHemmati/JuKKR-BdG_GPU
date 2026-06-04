@@ -168,6 +168,10 @@ contains
   end subroutine inversion
 
   subroutine inversion_gpu_batched(gllke_batch, gtemp_batch, ipvt_batch, info_batch, batchSize)
+#ifdef CPP_GPU
+    use iso_c_binding
+    use :: mod_constants, only: czero, cone
+#endif
     use :: global_variables, only: alm
     use :: mod_datatypes, only: dp
     implicit none
@@ -178,14 +182,11 @@ contains
     integer, intent(inout) :: info_batch(batchSize)
 
 #ifdef CPP_GPU
-    use iso_c_binding
-    use :: mod_constants, only: czero, cone
     integer :: i, j, k
 
     interface
       subroutine gpu_inversion_batched_c(gllke_batch, gtemp_batch, ipvt_batch, info_batch, alm, batchSize) bind(c, name="gpu_inversion_batched_c")
         use iso_c_binding
-        import :: c_int, c_ptr
         type(c_ptr), value :: gllke_batch, gtemp_batch, ipvt_batch, info_batch
         integer(c_int), value :: alm, batchSize
       end subroutine gpu_inversion_batched_c
