@@ -145,7 +145,7 @@ contains
     real (kind=dp) :: tpi_gpu, convpu_gpu
     complex (kind=dp) :: arg1, arg2, arg3, eikr_gpu, tt_gpu, eta_val
     complex (kind=dp), dimension (6) :: kp_gpu
-    integer :: idx, k
+    integer :: idx, k, m, ic, im, am, jn
 #endif
     ! .. Parameters
     complex (kind=dp), parameter :: cmi = -ci !! negative imaginary part \[-i\]
