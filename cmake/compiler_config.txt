@@ -184,6 +184,7 @@ endif()
 
 # GPU: configure compiler flags for OpenACC offloading
 if(ENABLE_GPU)
+    add_definitions(-DCPP_GPU)
     if(CMAKE_Fortran_COMPILER_ID MATCHES "NVHPC" OR CMAKE_Fortran_COMPILER_ID MATCHES "PGI" OR CMAKE_Fortran_COMPILER_ID MATCHES "NVIDIA" OR CMAKE_Fortran_COMPILER_ID MATCHES "Flang")
         message("NVIDIA compiler found. Enabling OpenACC offloading (-acc) and linking cuBLAS/cuSolver.")
         set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -acc -Minfo=accel -cudalib=cublas,cusolver")
