@@ -273,8 +273,7 @@ contains
 
     !$acc data copyin(bzkp(1:3, 1:nofks), &
     !$acc&            ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) &
+    !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd)) &
     !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
     !$acc&         atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
     !$acc&         rcls(1:3, 1:naclsd, 1:nclsd)) &
@@ -488,8 +487,8 @@ contains
       ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       if (.not. use_virtual_atoms) then
         ! $omp single
-        ! Offload tinvll subtraction to GPU (gllke already on device from dlke0)
-        !$acc parallel loop collapse(3) present(gllke(1:alm, 1:alm), tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) private(il1, il2)
+        ! Run on CPU since gllke assembly and subsequent inversion are on CPU
+        ! (avoids host-device data roundtrips for trivial size-81 matrix subtraction)
         do i1 = 1, naez
           do lm1 = 1, lmmaxd
             do lm2 = 1, lmmaxd
