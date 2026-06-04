@@ -58,7 +58,7 @@ contains
     ! array dimensions
     use :: global_variables, only: maxmshd, iemxd, natypd, naezd, kpoibz, lmmaxd, lmgf0d, lmaxd, nrefd, nsheld, wlength, nofgij, &
       naclsd, nspind, nclsd, nembd, krel, korbit, natomimpd, nrd, nembd1, nspindd, nprincd, irmind, nspotd, irmd, lpotd, &
-      ncleb, ipand, irnsd, lmpotd, irid, nfund, ntotd
+      ncleb, ipand, irnsd, lmpotd, irid, nfund, ntotd, nembd2
     ! stuff defined in main0 already
     use :: mod_main0, only: natyp, ielast, npol, nref, naez, nsra, ins, nspin, ncls, lly, atom, cls, nacls, refpot, ez, alat, rmtref, &
       vref, atomimp, icc, igf, nlbasis, nrbasis, ncpa, icpa, itcpamax, cpatol, rbasis, rr, ezoa, nshell, kmrot, kaoez, ish, jsh, nsh1, &
@@ -474,8 +474,8 @@ contains
     ! Static geometry arrays that never change across spin/energy/k-points:
     ! upload once here and keep resident on GPU for the entire calculation.
     ! ----------------------------------------------------------------------
-    !$acc data copyin(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd), &
-    !$acc&            atom(1:naclsd, 1:nembd), cls(1:nembd), nacls(1:nclsd), &
+    !$acc data copyin(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
+    !$acc&            atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
     !$acc&            rcls(1:3, 1:naclsd, 1:nclsd))
     do ispin = 1, nspin1
 
