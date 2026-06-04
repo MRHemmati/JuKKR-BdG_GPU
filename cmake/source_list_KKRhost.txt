@@ -260,7 +260,7 @@ add_library(lib_kkrhost STATIC
     source/KKRhost/interpolate_poten.f90
     source/KKRhost/intin.f90
     source/KKRhost/intout.f90
-    source/KKRhost/inversion.f90
+    source/KKRhost/inversion.F90
     source/KKRhost/invslab.f90
     source/KKRhost/invsupercell.f90
     source/KKRhost/ioben.f90
@@ -396,6 +396,10 @@ add_library(lib_kkrhost STATIC
 # disable cmake auto add of 'lib' prefix to .so file
 SET_TARGET_PROPERTIES(lib_kkrhost PROPERTIES PREFIX "")
 target_link_libraries(lib_kkrhost lib_common)
+
+if(ENABLE_GPU)
+    target_sources(lib_kkrhost PRIVATE source/KKRhost/gpu_inversion_wrapper.cpp)
+endif()
 
 
 # the executable is built from this list of files

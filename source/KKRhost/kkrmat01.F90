@@ -52,14 +52,14 @@ contains
 #endif
     use :: mod_types, only: t_inc
     use :: mod_runoptions, only: print_program_flow, use_Chebychev_solver, use_qdos, use_virtual_atoms, &
-      write_green_imp, write_rhoq_input, decouple_spin_cheby
+      write_green_imp, write_rhoq_input, decouple_spin_cheby, calc_complex_bandstructure, symmetrize_gmat, use_deci_onebulk
     use :: mod_rhoqtools, only: rhoq_find_kmask, rhoq_saveg, rhoq_write_tau0, rhoq_read_mu0_scoef
     use :: global_variables, only: nembd1, nembd2, nsheld, nclsd, naclsd, lmmaxd, nprincd, nrd, nrefd, lmgf0d, krel, ndim_slabinv, alm, almgf0 
     use :: mod_constants, only: czero, cone, nsymaxd, ci,pi
     use :: mod_datatypes, only: dp
     use :: mod_decimate, only: decimate
     use :: mod_dlke0, only: dlke0
-    use :: mod_inversion, only: inversion
+    use :: mod_inversion, only: inversion, inversion_gpu_batched
     use :: mod_cinit, only: cinit
 
     implicit none
@@ -130,6 +130,23 @@ contains
     complex (kind=dp), dimension (:, :), allocatable :: gllke0v, gllke0v2, gllketv ! for VIRTUAL ATOMS
     complex (kind=dp), dimension (:, :), allocatable :: gllketv_new ! for VIRTUAL ATOMS
     complex (kind=dp), dimension (:, :), allocatable :: gllke0, gllke0m
+
+#ifdef CPP_GPU
+    complex (kind=dp), dimension (:, :, :), allocatable :: gllken_batch, gllkem_batch, gllke_batch, gtemp_batch
+    complex (kind=dp), dimension (:, :, :), allocatable :: dgllken_batch, dgllkem_batch, dgllke_batch
+    complex (kind=dp), dimension (:, :, :), allocatable :: gllken1_batch, gllkem1_batch
+    complex (kind=dp), dimension (:, :, :), allocatable :: gllke0_batch, gllke0m_batch
+    complex (kind=dp), dimension (:, :, :), allocatable :: gllke01_batch, gllke0m1_batch
+    integer, dimension (:, :), allocatable :: ipvt_batch
+    integer, dimension (:), allocatable :: info_batch
+    complex (kind=dp), dimension (:, :), allocatable :: etaikr_batch
+    complex (kind=dp), dimension (:, :, :), allocatable :: grefllke_batch
+    integer :: batchSize
+    real (kind=dp) :: tpi_gpu, convpu_gpu
+    complex (kind=dp) :: arg1, arg2, arg3, eikr_gpu, tt_gpu, eta_val
+    complex (kind=dp), dimension (6) :: kp_gpu
+    integer :: idx, k
+#endif
     ! .. Parameters
     complex (kind=dp), parameter :: cmi = -ci !! negative imaginary part \[-i\]
 
@@ -258,6 +275,55 @@ contains
     end if                         ! (KREL.EQ.0)
     ! ----------------------------------------------------------------------
 
+#ifdef CPP_GPU
+    batchSize = max(0, k_end - k_start + 1)
+    if (batchSize > 0) then
+      allocate (gllke_batch(alm, alm, batchSize), stat=i_stat)
+      allocate (gtemp_batch(alm, alm, batchSize), stat=i_stat)
+      allocate (ipvt_batch(alm, batchSize), stat=i_stat)
+      allocate (info_batch(batchSize), stat=i_stat)
+      allocate (etaikr_batch(nsymaxd * nsheld, batchSize), stat=i_stat)
+      if (krel==0) then
+        allocate (gllken_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        allocate (gllkem_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        if (lly/=0) then
+          allocate (dgllken_batch(almgf0, almgf0, batchSize), stat=i_stat)
+          allocate (dgllkem_batch(almgf0, almgf0, batchSize), stat=i_stat)
+          allocate (dgllke_batch(alm, alm, batchSize), stat=i_stat)
+          allocate (grefllke_batch(alm, alm, batchSize), stat=i_stat)
+        end if
+        if (symmetrize_gmat) then
+          allocate (gllken1_batch(almgf0, almgf0, batchSize), stat=i_stat)
+          allocate (gllkem1_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        end if
+      else
+        allocate (gllke0_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        allocate (gllke0m_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        if (symmetrize_gmat) then
+          allocate (gllke01_batch(almgf0, almgf0, batchSize), stat=i_stat)
+          allocate (gllke0m1_batch(almgf0, almgf0, batchSize), stat=i_stat)
+        end if
+      end if
+
+      !$acc enter data create(gllke_batch, gtemp_batch, ipvt_batch, info_batch, etaikr_batch)
+      if (krel==0) then
+        !$acc enter data create(gllken_batch, gllkem_batch)
+        if (lly/=0) then
+          !$acc enter data create(dgllken_batch, dgllkem_batch, dgllke_batch, grefllke_batch)
+        end if
+        if (symmetrize_gmat) then
+          !$acc enter data create(gllken1_batch, gllkem1_batch)
+        end if
+      else
+        !$acc enter data create(gllke0_batch, gllke0m_batch)
+        if (symmetrize_gmat) then
+          !$acc enter data create(gllke01_batch, gllke0m1_batch)
+        end if
+      end if
+    end if
+#endif
+    ! ----------------------------------------------------------------------
+
 
 #ifdef CPP_HYBRID
     ! $omp parallel default(shared) &
@@ -291,6 +357,293 @@ contains
       rrm(i, 0) = 0.0_dp
     end do
 
+    ! kpts loop
+#ifdef CPP_GPU
+    if (.not. use_virtual_atoms .and. ideci == 0 .and. krel == 0) then
+      tpi_gpu = 8.0_dp*atan(1.0_dp)
+      convpu_gpu = alat/tpi_gpu
+
+      if (batchSize > 0) then
+        !$acc parallel loop collapse(3) present(gllken_batch, gllkem_batch, gllke_batch)
+        do k = 1, batchSize
+          do j = 1, almgf0
+            do i = 1, almgf0
+              gllken_batch(i, j, k) = czero
+              gllkem_batch(i, j, k) = czero
+            end do
+          end do
+        end do
+        !$acc parallel loop collapse(3) present(gllke_batch)
+        do k = 1, batchSize
+          do j = 1, alm
+            do i = 1, alm
+              gllke_batch(i, j, k) = czero
+            end do
+          end do
+        end do
+        if (symmetrize_gmat) then
+          !$acc parallel loop collapse(3) present(gllken1_batch, gllkem1_batch)
+          do k = 1, batchSize
+            do j = 1, almgf0
+              do i = 1, almgf0
+                gllken1_batch(i, j, k) = czero
+                gllkem1_batch(i, j, k) = czero
+              end do
+            end do
+          end do
+        end if
+
+        !$acc parallel loop collapse(1) &
+        !$acc& present(bzkp, ginp, rr, ezoa, atom, cls, nacls, rcls) &
+        !$acc& present(gllken_batch, gllkem_batch, gllke_batch, etaikr_batch) &
+        !$acc& present(rrm, tinvll) &
+        !$acc& private(kp_gpu, carg, zktr, tt_gpu, eikr_gpu, arg1, arg2, arg3) &
+        !$acc& private(i, m, lm2, lm1, ic, im, am, isym, ns, j, i1, idx)
+        do kpt = k_start, k_end
+          idx = kpt - k_start + 1
+          kp_gpu(1:3) = bzkp(1:3, kpt)
+          if (calc_complex_bandstructure) then
+            kp_gpu(4:6) = bzkp(4:6, kpt)
+          else
+            kp_gpu(4:6) = czero
+          end if
+
+          ! Phase factors etaikr
+          do ns = 1, nshell
+            i = nsh1(ns)
+            j = nsh2(ns)
+            do isym = 1, nsymat
+              if (ns <= nsdia) then
+                etaikr_batch((isym-1)*nshell + ns, idx) = volcub(kpt)
+              else
+                carg = czero
+                do i1 = 1, 3
+                  zktr = rrot(isym, i1, ns) - rbasis(i1, j) + rbasis(i1, i)
+                  zktr = kp_gpu(i1)*zktr
+                  carg = carg + zktr
+                end do
+                etaikr_batch((isym-1)*nshell + ns, idx) = volcub(kpt)*exp(carg*citpi)
+              end if
+            end do
+          end do
+
+          ! Fourier transform for gllken_batch (using rr)
+          do i = 1, naez
+            do m = 1, naclsmax
+              do lm2 = 1, lmgf0d
+                if (m <= nacls(cls(i))) then
+                  if (atom(m, i) >= 0) then
+                    ic = cls(i)
+                    if (use_deci_onebulk) then
+                      arg1 = -ci*tpi_gpu*rcls(1, m, ic)
+                      arg2 = -ci*tpi_gpu*rcls(2, m, ic)
+                      arg3 = -ci*tpi_gpu*rcls(3, m, ic)
+                    else
+                      arg1 = -ci*tpi_gpu*rr(1, ezoa(m, i))
+                      arg2 = -ci*tpi_gpu*rr(2, ezoa(m, i))
+                      arg3 = -ci*tpi_gpu*rr(3, ezoa(m, i))
+                    end if
+
+                    tt_gpu = kp_gpu(1)*arg1 + kp_gpu(2)*arg2 + kp_gpu(3)*arg3
+                    if (calc_complex_bandstructure) then
+                      tt_gpu = tt_gpu + ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
+                    end if
+
+                    eikr_gpu = exp(tt_gpu)*convpu_gpu
+
+                    im = 1 + (m-1)*lmgf0d
+                    am = 1 + (atom(m, i)-1)*lmgf0d
+                    do lm1 = 1, lmgf0d
+                      gllken_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
+                        gllken_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
+                    end do
+                  end if
+                end if
+              end do
+            end do
+          end do
+
+          if (symmetrize_gmat) then
+            do i = 1, naez
+              do m = 1, naclsmax
+                do lm2 = 1, lmgf0d
+                  if (m <= nacls(cls(i))) then
+                    if (atom(m, i) >= 0) then
+                      ic = cls(i)
+                      if (use_deci_onebulk) then
+                        arg1 = -ci*tpi_gpu*rcls(1, m, ic)
+                        arg2 = -ci*tpi_gpu*rcls(2, m, ic)
+                        arg3 = -ci*tpi_gpu*rcls(3, m, ic)
+                      else
+                        arg1 = -ci*tpi_gpu*rr(1, ezoa(m, i))
+                        arg2 = -ci*tpi_gpu*rr(2, ezoa(m, i))
+                        arg3 = -ci*tpi_gpu*rr(3, ezoa(m, i))
+                      end if
+
+                      tt_gpu = -kp_gpu(1)*arg1 - kp_gpu(2)*arg2 - kp_gpu(3)*arg3
+                      if (calc_complex_bandstructure) then
+                        tt_gpu = tt_gpu - ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
+                      end if
+
+                      eikr_gpu = exp(tt_gpu)*convpu_gpu
+
+                      im = 1 + (m-1)*lmgf0d
+                      am = 1 + (atom(m, i)-1)*lmgf0d
+                      do lm1 = 1, lmgf0d
+                        gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
+                          gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
+                      end do
+                    end if
+                  end if
+                end do
+              end do
+            end do
+
+            do j = 1, naez
+              do i = 1, naez
+                do lm2 = 1, lmgf0d
+                  do lm1 = 1, lmgf0d
+                    im = (i-1)*lmgf0d + lm1
+                    jn = (j-1)*lmgf0d + lm2
+                    gllken_batch(im, jn, idx) = (gllken_batch(im, jn, idx) + gllken1_batch(jn, im, idx)) * 0.5_dp
+                  end do
+                end do
+              end do
+            end do
+          end if
+
+          ! Fourier transform for gllkem_batch (using rrm)
+          do i = 1, naez
+            do m = 1, naclsmax
+              do lm2 = 1, lmgf0d
+                if (m <= nacls(cls(i))) then
+                  if (atom(m, i) >= 0) then
+                    ic = cls(i)
+                    if (use_deci_onebulk) then
+                      arg1 = -ci*tpi_gpu*rcls(1, m, ic)
+                      arg2 = -ci*tpi_gpu*rcls(2, m, ic)
+                      arg3 = -ci*tpi_gpu*rcls(3, m, ic)
+                    else
+                      arg1 = -ci*tpi_gpu*rrm(1, ezoa(m, i))
+                      arg2 = -ci*tpi_gpu*rrm(2, ezoa(m, i))
+                      arg3 = -ci*tpi_gpu*rrm(3, ezoa(m, i))
+                    end if
+
+                    tt_gpu = kp_gpu(1)*arg1 + kp_gpu(2)*arg2 + kp_gpu(3)*arg3
+                    if (calc_complex_bandstructure) then
+                      tt_gpu = tt_gpu + ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
+                    end if
+
+                    eikr_gpu = exp(tt_gpu)*convpu_gpu
+
+                    im = 1 + (m-1)*lmgf0d
+                    am = 1 + (atom(m, i)-1)*lmgf0d
+                    do lm1 = 1, lmgf0d
+                      gllkem_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
+                        gllkem_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
+                    end do
+                  end if
+                end if
+              end do
+            end do
+          end do
+
+          if (symmetrize_gmat) then
+            do i = 1, naez
+              do m = 1, naclsmax
+                do lm2 = 1, lmgf0d
+                  if (m <= nacls(cls(i))) then
+                    if (atom(m, i) >= 0) then
+                      ic = cls(i)
+                      if (use_deci_onebulk) then
+                        arg1 = -ci*tpi_gpu*rcls(1, m, ic)
+                        arg2 = -ci*tpi_gpu*rcls(2, m, ic)
+                        arg3 = -ci*tpi_gpu*rcls(3, m, ic)
+                      else
+                        arg1 = -ci*tpi_gpu*rrm(1, ezoa(m, i))
+                        arg2 = -ci*tpi_gpu*rrm(2, ezoa(m, i))
+                        arg3 = -ci*tpi_gpu*rrm(3, ezoa(m, i))
+                      end if
+
+                      tt_gpu = -kp_gpu(1)*arg1 - kp_gpu(2)*arg2 - kp_gpu(3)*arg3
+                      if (calc_complex_bandstructure) then
+                        tt_gpu = tt_gpu - ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
+                      end if
+
+                      eikr_gpu = exp(tt_gpu)*convpu_gpu
+
+                      im = 1 + (m-1)*lmgf0d
+                      am = 1 + (atom(m, i)-1)*lmgf0d
+                      do lm1 = 1, lmgf0d
+                        gllkem1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
+                          gllkem1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
+                      end do
+                    end if
+                  end if
+                end do
+              end do
+            end do
+
+            do j = 1, naez
+              do i = 1, naez
+                do lm2 = 1, lmgf0d
+                  do lm1 = 1, lmgf0d
+                    im = (i-1)*lmgf0d + lm1
+                    jn = (j-1)*lmgf0d + lm2
+                    gllkem_batch(im, jn, idx) = (gllkem_batch(im, jn, idx) + gllkem1_batch(jn, im, idx)) * 0.5_dp
+                  end do
+                end do
+              end do
+            end do
+          end if
+
+          ! Combine gllken_batch and gllkem_batch into gllke_batch
+          do i2 = 1, alm
+            do i1 = 1, alm
+              gllke_batch(i1, i2, idx) = (gllken_batch(i1, i2, idx) + gllkem_batch(i2, i1, idx)) * 0.5_dp
+            end do
+          end do
+
+          ! Subtract tinvll
+          do i1 = 1, naez
+            do lm1 = 1, lmmaxd
+              do lm2 = 1, lmmaxd
+                il1 = lmmaxd*(i1-1) + lm1
+                il2 = lmmaxd*(i1-1) + lm2
+                gllke_batch(il1, il2, idx) = gllke_batch(il1, il2, idx) - tinvll(lm1, lm2, i1)
+              end do
+            end do
+          end do
+
+        end do
+
+        ! Call batched inversion on GPU
+        call inversion_gpu_batched(gllke_batch, gtemp_batch, ipvt_batch, info_batch, batchSize)
+
+        ! Parallel accumulation into gs
+        !$acc parallel loop collapse(4) present(gs, gllke_batch, etaikr_batch) &
+        !$acc& private(eta_val, idx, i, j, ilm, jlm)
+        do ns = 1, nshell
+          do isym = 1, nsymat
+            do lm2 = 1, lmmaxd
+              do lm1 = 1, lmmaxd
+                do kpt = k_start, k_end
+                  idx = kpt - k_start + 1
+                  i = nsh1(ns)
+                  j = nsh2(ns)
+                  ilm = lmmaxd*(i-1) + lm1
+                  jlm = lmmaxd*(j-1) + lm2
+                  eta_val = etaikr_batch((isym-1)*nshell + ns, idx)
+                  gs(lm1, lm2, isym, ns) = gs(lm1, lm2, isym, ns) + eta_val * gllke_batch(ilm, jlm, idx)
+                end do
+              end do
+            end do
+          end do
+        end do
+      end if
+
+    else
+#endif
     ! kpts loop
     do kpt = k_start, k_end
       gllke(:, :) = czero
@@ -670,6 +1023,9 @@ contains
       end if                       ! mythread==0
 
     end do                         ! KPT = 1,NOFKS   end K-points loop
+#ifdef CPP_GPU
+    end if
+#endif
     !$acc end data
 100 format ('                 |')  ! status bar
 110 format ('|')                   ! status bar
@@ -731,6 +1087,32 @@ contains
     ! deallocate arrays
     ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     i_all = -product(shape(gllke))*kind(gllke)
+#ifdef CPP_GPU
+    if (batchSize > 0) then
+      !$acc exit data delete(gllke_batch, gtemp_batch, ipvt_batch, info_batch, etaikr_batch)
+      deallocate(gllke_batch, gtemp_batch, ipvt_batch, info_batch, etaikr_batch, stat=i_stat)
+      if (allocated(gllken_batch)) then
+        !$acc exit data delete(gllken_batch, gllkem_batch)
+        deallocate(gllken_batch, gllkem_batch, stat=i_stat)
+        if (allocated(dgllken_batch)) then
+          !$acc exit data delete(dgllken_batch, dgllkem_batch, dgllke_batch, grefllke_batch)
+          deallocate(dgllken_batch, dgllkem_batch, dgllke_batch, grefllke_batch, stat=i_stat)
+        end if
+        if (allocated(gllken1_batch)) then
+          !$acc exit data delete(gllken1_batch, gllkem1_batch)
+          deallocate(gllken1_batch, gllkem1_batch, stat=i_stat)
+        end if
+      else if (allocated(gllke0_batch)) then
+        !$acc exit data delete(gllke0_batch, gllke0m_batch)
+        deallocate(gllke0_batch, gllke0m_batch, stat=i_stat)
+        if (allocated(gllke01_batch)) then
+          !$acc exit data delete(gllke01_batch, gllke0m1_batch)
+          deallocate(gllke01_batch, gllke0m1_batch, stat=i_stat)
+        end if
+      end if
+    end if
+#endif
+
     deallocate (gllke, stat=i_stat)
     ! LLY Lloyd
     if (lly/=0) then

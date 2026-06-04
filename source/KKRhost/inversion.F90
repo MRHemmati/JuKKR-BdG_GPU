@@ -167,4 +167,51 @@ contains
 
   end subroutine inversion
 
+  subroutine inversion_gpu_batched(gllke_batch, gtemp_batch, ipvt_batch, info_batch, batchSize)
+    use :: global_variables, only: alm
+    use :: mod_datatypes, only: dp
+    implicit none
+    integer, intent(in) :: batchSize
+    complex (kind=dp), intent(inout) :: gllke_batch(alm, alm, batchSize)
+    complex (kind=dp), intent(inout) :: gtemp_batch(alm, alm, batchSize)
+    integer, intent(inout) :: ipvt_batch(alm, batchSize)
+    integer, intent(inout) :: info_batch(batchSize)
+
+#ifdef CPP_GPU
+    use iso_c_binding
+    use :: mod_constants, only: czero, cone
+    integer :: i, j, k
+
+    interface
+      subroutine gpu_inversion_batched_c(gllke_batch, gtemp_batch, ipvt_batch, info_batch, alm, batchSize) bind(c, name="gpu_inversion_batched_c")
+        use iso_c_binding
+        import :: c_int, c_ptr
+        type(c_ptr), value :: gllke_batch, gtemp_batch, ipvt_batch, info_batch
+        integer(c_int), value :: alm, batchSize
+      end subroutine gpu_inversion_batched_c
+    end interface
+
+    ! Initialize identity matrices on GPU in parallel
+    !$acc parallel loop collapse(3) present(gtemp_batch)
+    do k = 1, batchSize
+      do j = 1, alm
+        do i = 1, alm
+          if (i == j) then
+            gtemp_batch(i, j, k) = cone
+          else
+            gtemp_batch(i, j, k) = czero
+          end if
+        end do
+      end do
+    end do
+
+    ! Call cuBLAS batched solver using OpenACC device pointers
+    !$acc host_data use_device(gllke_batch, gtemp_batch, ipvt_batch, info_batch)
+    call gpu_inversion_batched_c(c_loc(gllke_batch(1,1,1)), c_loc(gtemp_batch(1,1,1)), c_loc(ipvt_batch(1,1)), c_loc(info_batch(1)), int(alm, c_int), int(batchSize, c_int))
+    !$acc end host_data
+#else
+    stop 'inversion_gpu_batched called but CPP_GPU is not defined!'
+#endif
+  end subroutine inversion_gpu_batched
+
 end module mod_inversion
