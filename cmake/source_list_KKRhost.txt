@@ -424,9 +424,15 @@ if(ENABLE_GPU)
     target_link_libraries(kkr.x PRIVATE stdc++)
     
     # Configure dynamic linking search paths (RPATH) for CUDA libraries
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    set(gpu_rpaths 
+        "${CUDAToolkit_LIBRARY_DIR}"
+        "/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/cuda/12.2/lib64"
+        "/opt/nvidia_hpc_sdk/Linux_x86_64/23.9/compilers/lib"
+    )
     set_target_properties(kkr.x PROPERTIES
-        INSTALL_RPATH "${CUDAToolkit_LIBRARY_DIR}"
-        BUILD_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+        INSTALL_RPATH "${gpu_rpaths}"
+        BUILD_RPATH "${gpu_rpaths}"
         INSTALL_RPATH_USE_LINK_PATH TRUE
     )
 endif()
@@ -446,8 +452,8 @@ if(ENABLE_BdG)
         set_target_properties(kkr_BdG_radial.x PROPERTIES LINKER_LANGUAGE Fortran)
         target_link_libraries(kkr_BdG_radial.x PRIVATE stdc++)
         set_target_properties(kkr_BdG_radial.x PROPERTIES
-            INSTALL_RPATH "${CUDAToolkit_LIBRARY_DIR}"
-            BUILD_RPATH "${CUDAToolkit_LIBRARY_DIR}"
+            INSTALL_RPATH "${gpu_rpaths}"
+            BUILD_RPATH "${gpu_rpaths}"
             INSTALL_RPATH_USE_LINK_PATH TRUE
         )
     endif()
