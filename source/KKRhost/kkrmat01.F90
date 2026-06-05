@@ -342,7 +342,7 @@ contains
     !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
     !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez), &
     !$acc&            rrot(1:nsymaxd, 1:3, 1:nsheld), &
-    !$acc&            rbasis(1:3, 1:naezd), &
+    !$acc&            rbasis(1:3, 1:nembd2), &
     !$acc&            volcub(1:nofks), &
     !$acc&            nsh1(1:nsheld), &
     !$acc&            nsh2(1:nsheld)) &
