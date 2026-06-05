@@ -337,10 +337,16 @@ contains
     mythread = 0
 #endif
 
-    !$acc data copyin(bzkp(1:3, 1:nofks), &
+    !$acc data copyin(bzkp(1:6, 1:nofks), &
     !$acc&            ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
     !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
-    !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez)) &
+    !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez), &
+    !$acc&            rrot(1:nsymaxd, 1:3, 1:nsheld), &
+    !$acc&            rbasis(1:3, 1:naezd), &
+    !$acc&            volcub(1:nofks), &
+    !$acc&            nsh1(1:nsheld), &
+    !$acc&            nsh2(1:nsheld)) &
+    !$acc& copy(gs(1:lmmaxd, 1:lmmaxd, 1:nsymaxd, 1:nshell)) &
     !$acc& present(rr(1:3, 0:nrd), ezoa(1:naclsd, 1:nembd2), &
     !$acc&         atom(1:naclsd, 1:nembd2), cls(1:nembd2), nacls(1:nclsd), &
     !$acc&         rcls(1:3, 1:naclsd, 1:nclsd)) &
@@ -357,7 +363,6 @@ contains
     do i = 1, 3
       rrm(i, 0) = 0.0_dp
     end do
-
     ! kpts loop
 #ifdef CPP_GPU
     if (.not. use_virtual_atoms .and. ideci == 0 .and. krel == 0) then
@@ -394,12 +399,29 @@ contains
           end do
         end if
 
-        !$acc parallel loop collapse(1) &
-        !$acc& present(bzkp, ginp, rr, ezoa, atom, cls, nacls, rcls) &
-        !$acc& present(gllken_batch, gllkem_batch, gllke_batch, etaikr_batch) &
-        !$acc& present(rrm, tinvll) &
-        !$acc& private(kp_gpu, carg, zktr, tt_gpu, eikr_gpu, arg1, arg2, arg3) &
-        !$acc& private(i, m, lm2, lm1, ic, im, am, isym, ns, j, i1, idx)
+        ! Parallel phase factors calculation on GPU
+        !$acc parallel loop collapse(3) present(etaikr_batch, bzkp, volcub, rrot, rbasis, nsh1, nsh2) &
+        !$acc& private(kp_gpu, carg, zktr, i1, i, j)
+        do kpt = k_start, k_end
+          do ns = 1, nshell
+            do isym = 1, nsymat
+              if (ns <= nsdia) then
+                etaikr_batch((isym-1)*nshell + ns, kpt - k_start + 1) = volcub(kpt)
+              else
+                i = nsh1(ns)
+                j = nsh2(ns)
+                carg = czero
+                do i1 = 1, 3
+                  zktr = rrot(isym, i1, ns) - rbasis(i1, j) + rbasis(i1, i)
+                  carg = carg + bzkp(i1, kpt)*zktr
+                end do
+                etaikr_batch((isym-1)*nshell + ns, kpt - k_start + 1) = volcub(kpt)*exp(carg*citpi)
+              end if
+            end do
+          end do
+        end do
+
+        ! CPU loop over k-points to launch parallel GPU Fourier transforms
         do kpt = k_start, k_end
           idx = kpt - k_start + 1
           kp_gpu(1:3) = bzkp(1:3, kpt)
@@ -409,26 +431,12 @@ contains
             kp_gpu(4:6) = czero
           end if
 
-          ! Phase factors etaikr
-          do ns = 1, nshell
-            i = nsh1(ns)
-            j = nsh2(ns)
-            do isym = 1, nsymat
-              if (ns <= nsdia) then
-                etaikr_batch((isym-1)*nshell + ns, idx) = volcub(kpt)
-              else
-                carg = czero
-                do i1 = 1, 3
-                  zktr = rrot(isym, i1, ns) - rbasis(i1, j) + rbasis(i1, i)
-                  zktr = kp_gpu(i1)*zktr
-                  carg = carg + zktr
-                end do
-                etaikr_batch((isym-1)*nshell + ns, idx) = volcub(kpt)*exp(carg*citpi)
-              end if
-            end do
-          end do
-
           ! Fourier transform for gllken_batch (using rr)
+          !$acc parallel loop collapse(3) &
+          !$acc& copyin(kp_gpu) &
+          !$acc& present(rr, ezoa, atom, cls, nacls, rcls, ginp) &
+          !$acc& present(gllken_batch) &
+          !$acc& private(ic, arg1, arg2, arg3, tt_gpu, eikr_gpu, im, am, lm1)
           do i = 1, naez
             do m = 1, naclsmax
               do lm2 = 1, lmgf0d
@@ -464,56 +472,12 @@ contains
             end do
           end do
 
-          if (symmetrize_gmat) then
-            do i = 1, naez
-              do m = 1, naclsmax
-                do lm2 = 1, lmgf0d
-                  if (m <= nacls(cls(i))) then
-                    if (atom(m, i) >= 0) then
-                      ic = cls(i)
-                      if (use_deci_onebulk) then
-                        arg1 = -ci*tpi_gpu*rcls(1, m, ic)
-                        arg2 = -ci*tpi_gpu*rcls(2, m, ic)
-                        arg3 = -ci*tpi_gpu*rcls(3, m, ic)
-                      else
-                        arg1 = -ci*tpi_gpu*rr(1, ezoa(m, i))
-                        arg2 = -ci*tpi_gpu*rr(2, ezoa(m, i))
-                        arg3 = -ci*tpi_gpu*rr(3, ezoa(m, i))
-                      end if
-
-                      tt_gpu = -kp_gpu(1)*arg1 - kp_gpu(2)*arg2 - kp_gpu(3)*arg3
-                      if (calc_complex_bandstructure) then
-                        tt_gpu = tt_gpu - ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
-                      end if
-
-                      eikr_gpu = exp(tt_gpu)*convpu_gpu
-
-                      im = 1 + (m-1)*lmgf0d
-                      am = 1 + (atom(m, i)-1)*lmgf0d
-                      do lm1 = 1, lmgf0d
-                        gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
-                          gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
-                      end do
-                    end if
-                  end if
-                end do
-              end do
-            end do
-
-            do j = 1, naez
-              do i = 1, naez
-                do lm2 = 1, lmgf0d
-                  do lm1 = 1, lmgf0d
-                    im = (i-1)*lmgf0d + lm1
-                    jn = (j-1)*lmgf0d + lm2
-                    gllken_batch(im, jn, idx) = (gllken_batch(im, jn, idx) + gllken1_batch(jn, im, idx)) * 0.5_dp
-                  end do
-                end do
-              end do
-            end do
-          end if
-
           ! Fourier transform for gllkem_batch (using rrm)
+          !$acc parallel loop collapse(3) &
+          !$acc& copyin(kp_gpu) &
+          !$acc& present(rrm, ezoa, atom, cls, nacls, rcls, ginp) &
+          !$acc& present(gllkem_batch) &
+          !$acc& private(ic, arg1, arg2, arg3, tt_gpu, eikr_gpu, im, am, lm1)
           do i = 1, naez
             do m = 1, naclsmax
               do lm2 = 1, lmgf0d
@@ -550,6 +514,51 @@ contains
           end do
 
           if (symmetrize_gmat) then
+            !$acc parallel loop collapse(3) &
+            !$acc& copyin(kp_gpu) &
+            !$acc& present(rr, ezoa, atom, cls, nacls, rcls, ginp) &
+            !$acc& present(gllken1_batch) &
+            !$acc& private(ic, arg1, arg2, arg3, tt_gpu, eikr_gpu, im, am, lm1)
+            do i = 1, naez
+              do m = 1, naclsmax
+                do lm2 = 1, lmgf0d
+                  if (m <= nacls(cls(i))) then
+                    if (atom(m, i) >= 0) then
+                      ic = cls(i)
+                      if (use_deci_onebulk) then
+                        arg1 = -ci*tpi_gpu*rcls(1, m, ic)
+                        arg2 = -ci*tpi_gpu*rcls(2, m, ic)
+                        arg3 = -ci*tpi_gpu*rcls(3, m, ic)
+                      else
+                        arg1 = -ci*tpi_gpu*rr(1, ezoa(m, i))
+                        arg2 = -ci*tpi_gpu*rr(2, ezoa(m, i))
+                        arg3 = -ci*tpi_gpu*rr(3, ezoa(m, i))
+                      end if
+
+                      tt_gpu = -kp_gpu(1)*arg1 - kp_gpu(2)*arg2 - kp_gpu(3)*arg3
+                      if (calc_complex_bandstructure) then
+                        tt_gpu = tt_gpu - ci*(kp_gpu(4)*arg1+kp_gpu(5)*arg2+kp_gpu(6)*arg3)
+                      end if
+
+                      eikr_gpu = exp(tt_gpu)*convpu_gpu
+
+                      im = 1 + (m-1)*lmgf0d
+                      am = 1 + (atom(m, i)-1)*lmgf0d
+                      do lm1 = 1, lmgf0d
+                        gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) = &
+                          gllken1_batch(am + lm1 - 1, (i-1)*lmgf0d + lm2, idx) + eikr_gpu * ginp(im + lm1 - 1, lm2, ic)
+                      end do
+                    end if
+                  end if
+                end do
+              end do
+            end do
+
+            !$acc parallel loop collapse(3) &
+            !$acc& copyin(kp_gpu) &
+            !$acc& present(rrm, ezoa, atom, cls, nacls, rcls, ginp) &
+            !$acc& present(gllkem1_batch) &
+            !$acc& private(ic, arg1, arg2, arg3, tt_gpu, eikr_gpu, im, am, lm1)
             do i = 1, naez
               do m = 1, naclsmax
                 do lm2 = 1, lmgf0d
@@ -585,12 +594,16 @@ contains
               end do
             end do
 
+            ! Symmetrize gllken_batch and gllkem_batch
+            !$acc parallel loop collapse(3) present(gllken_batch, gllkem_batch, gllken1_batch, gllkem1_batch) &
+            !$acc& private(im, jn)
             do j = 1, naez
               do i = 1, naez
                 do lm2 = 1, lmgf0d
                   do lm1 = 1, lmgf0d
                     im = (i-1)*lmgf0d + lm1
                     jn = (j-1)*lmgf0d + lm2
+                    gllken_batch(im, jn, idx) = (gllken_batch(im, jn, idx) + gllken1_batch(jn, im, idx)) * 0.5_dp
                     gllkem_batch(im, jn, idx) = (gllkem_batch(im, jn, idx) + gllkem1_batch(jn, im, idx)) * 0.5_dp
                   end do
                 end do
@@ -599,6 +612,7 @@ contains
           end if
 
           ! Combine gllken_batch and gllkem_batch into gllke_batch
+          !$acc parallel loop collapse(2) present(gllke_batch, gllken_batch, gllkem_batch)
           do i2 = 1, alm
             do i1 = 1, alm
               gllke_batch(i1, i2, idx) = (gllken_batch(i1, i2, idx) + gllkem_batch(i2, i1, idx)) * 0.5_dp
@@ -606,16 +620,17 @@ contains
           end do
 
           ! Subtract tinvll
+          !$acc parallel loop collapse(3) present(gllke_batch, tinvll) &
+          !$acc& private(il1, il2)
           do i1 = 1, naez
-            do lm1 = 1, lmmaxd
-              do lm2 = 1, lmmaxd
+            do lm2 = 1, lmmaxd
+              do lm1 = 1, lmmaxd
                 il1 = lmmaxd*(i1-1) + lm1
                 il2 = lmmaxd*(i1-1) + lm2
                 gllke_batch(il1, il2, idx) = gllke_batch(il1, il2, idx) - tinvll(lm1, lm2, i1)
               end do
             end do
           end do
-
         end do
 
         ! Call batched inversion on GPU
