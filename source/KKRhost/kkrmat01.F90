@@ -337,7 +337,7 @@ contains
     mythread = 0
 #endif
 
-    !$acc data copyin(bzkp(1:6, 1:nofks), &
+    !$acc data copyin(bzkp(1:3, 1:nofks), &
     !$acc&            ginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
     !$acc&            dginp(1:lmgf0d*naclsmax, 1:lmgf0d, 1:nclsd), &
     !$acc&            tinvll(1:lmmaxd, 1:lmmaxd, 1:naez), &
