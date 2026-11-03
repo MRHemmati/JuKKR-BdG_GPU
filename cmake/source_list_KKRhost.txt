@@ -11,6 +11,17 @@ if(ENABLE_MPI) # this works only in hybrid mode at the moment and not with OpenM
     set_source_files_properties(source/common/radial_solver_Chebychev/rllsll.F90 PROPERTIES COMPILE_FLAGS "${ompflags}")
 endif()
 
+# MPI+GPU design: run the Chebyshev radial solver on the CPU (-acc=host), not the GPU.
+# Profiling showed rllsll is thousands of small (~234x234) solves per iteration that are
+# FASTER on a CPU core (GPU per-call launch overhead dominates) and are parallelised
+# across MPI ranks. The GPU is reserved for the big batched k-loop inversion (kkrmat01).
+# Keeping these files off the GPU also removes the need for CUDA managed memory.
+if(ENABLE_GPU)
+    set_source_files_properties(source/common/radial_solver_Chebychev/rllsll.F90 PROPERTIES COMPILE_FLAGS "${ompflags} -acc=host")
+    set_source_files_properties(source/common/radial_solver_Chebychev/rll_local_solutions.F90 PROPERTIES COMPILE_FLAGS "-acc=host")
+    set_source_files_properties(source/common/radial_solver_Chebychev/sll_local_solutions.F90 PROPERTIES COMPILE_FLAGS "-acc=host")
+endif()
+
 # parallelization of global/local solutions broken, probably because local solutions are called within global solutions
 #set_source_files_properties(source/KKRhost/rll_local_solutions.F90 PROPERTIES COMPILE_FLAGS "${ompflags}")
 #set_source_files_properties(source/KKRhost/sll_local_solutons.F90 PROPERTIES COMPILE_FLAGS "${ompflags}")

@@ -32,6 +32,9 @@ program kkrcode
   use :: mod_mympi, only: mympi_init, myrank, nranks, master
   use :: mod_save_wavefun, only: t_wavefunctions
 #endif
+#ifdef CPP_GPU
+  use :: openacc
+#endif
   use :: mod_constants, only: czero, nsymaxd
   use :: mod_runoptions, only: disable_print_serialnumber, stop_1a, stop_1b, stop_1c, write_green_host, use_qdos
   use :: mod_profiling, only: memocc
@@ -68,6 +71,9 @@ program kkrcode
   implicit none
 
   integer :: i_stat, i_all
+#ifdef CPP_GPU
+  integer :: acc_ngpu, acc_mydev
+#endif
 #ifdef CPP_MPI
   integer :: mympi_comm_at, mympi_comm_ie, nranks_at, myrank_at
   integer :: ierr, myrank_ie, nranks_ie, nranks_atcomm, myrank_atcomm
@@ -86,6 +92,22 @@ program kkrcode
 #endif
   ! set variables master, myrank and nranks for serial (myrank=master=0, nranks=1) as well as parallel execution
   call mympi_init()
+
+#ifdef CPP_GPU
+  ! MPI+GPU: map each rank to one GPU (round-robin over the node's devices) so ranks
+  ! spread across all GPUs instead of contending on device 0. For a single GPU node the
+  ! global rank equals the node-local rank (multi-node GPU runs would need a node-local
+  ! rank). Only the k-loop inversion (kkrmat01) runs on the GPU; the radial solver runs
+  ! on the CPU per rank (compiled -acc=host), so the GPU handles the big batched work
+  ! while MPI parallelises the many-small single-site/density work.
+  acc_ngpu = acc_get_num_devices(acc_device_nvidia)
+  if (acc_ngpu > 0) then
+    acc_mydev = mod(myrank, acc_ngpu)
+    call acc_set_device_num(acc_mydev, acc_device_nvidia)
+    call acc_init(acc_device_nvidia)
+    write (*, '(A,I0,A,I0,A,I0,A)') ' GPU: MPI rank ', myrank, ' -> device ', acc_mydev, ' / ', acc_ngpu, ' visible'
+  end if
+#endif
   ! save myrank in ctemp, needed to open output unit 1337
   write (ctemp, '(I03.3)') myrank
   ! find serial number that is printed to files
@@ -295,6 +317,12 @@ program kkrcode
   ! for i_write (or i_time) =2 do not reset files > here for output.*.txt, after main2, copy writeout after main0 to different file
   if (myrank/=master) call timing_init(myrank)
   if (t_inc%i_write<2) then
+    ! output.0.txt is made by copying the still-open main0 log output.000.txt via an
+    ! external 'cp'. The unit-1337 buffer MUST be flushed to disk first, otherwise the
+    ! copy catches a partially-written file (e.g. truncated mid-<SYMTAUMAT>). Intel
+    ! flushes eagerly and hides this; nvfortran buffers more, so output.0.txt came out
+    ! truncated and broke the AiiDA/masci-tools parser (get_symmetries).
+    if (myrank==master) flush (1337)
 #ifdef CPP_OLDCOMP
     if (myrank==master) call system('cp output.000.txt output.0.txt')
 #else

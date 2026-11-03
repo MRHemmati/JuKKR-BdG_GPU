@@ -705,7 +705,11 @@ contains
     call zgemm('n', 'n', lmsize, lmsize, lmsize, cone/gmatprefactor, bllp(1,1,npan), & ! calc t-matrix tll = bll*alpha^-1
       lmsize, allp(1,1,npan), lmsize, czero, tllp, lmsize)
 
-    !$acc update device(allp(1:lmsize, 1:lmsize, npan), ull)
+    ! Push the host-inverted alpha (allp(:,:,npan)) back to device for the rll build below.
+    ! NOTE: do NOT update `ull` here — it was computed on-device above and never modified
+    ! on the host, so updating it device-side would clobber the correct device copy with a
+    ! stale host copy (zeroing the regular solution -> zero density / DOS(E_F)=0).
+    !$acc update device(allp(1:lmsize, 1:lmsize, npan))
     ! GPU: convert volterra to fredholm solution on GPU
     !$acc parallel loop collapse(3)
     do nm = 1, nrmax

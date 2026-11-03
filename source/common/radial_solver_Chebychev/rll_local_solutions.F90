@@ -93,8 +93,20 @@ contains
     use :: mod_datatypes, only: dp
     use :: mod_sll_local_solutions, only: svpart
     use :: mod_constants, only: cone,czero
+#ifdef CPP_GPU
+    use, intrinsic :: iso_c_binding, only: c_ptr, c_loc, c_int
+#endif
 
     implicit none
+#ifdef CPP_GPU
+    interface
+      subroutine gpu_rll_solve_c(a, b1, b2, n, nrhs) bind(c, name="gpu_rll_solve_c")
+        use, intrinsic :: iso_c_binding, only: c_ptr, c_int
+        type(c_ptr), value :: a, b1, b2
+        integer(c_int), value :: n, nrhs
+      end subroutine gpu_rll_solve_c
+    end interface
+#endif
     integer :: ncheb               ! number of chebyshev nodes
     integer :: lmsize              ! lm-components * nspin
     integer :: lmsize2             ! lmsize * nvec
@@ -126,7 +138,7 @@ contains
     complex (kind=dp) :: vll(lmsize*nvec, lmsize*nvec, nrmax) ! potential term in 5.7
 
     complex (kind=dp) :: mrnvy(lmsize, lmsize), mrnvz(lmsize, lmsize), mrjvy(lmsize, lmsize), mrjvz(lmsize, lmsize), yrf(lmsize2, lmsize, 0:ncheb), zrf(lmsize2, lmsize, 0:ncheb)
-    complex (kind=dp) :: slv(0:ncheb, lmsize2, 0:ncheb, lmsize2), slv1(0:ncheb, lmsize, 0:ncheb, lmsize), yrll1(0:ncheb, lmsize, lmsize), zrll1(0:ncheb, lmsize, lmsize), &
+    complex (kind=dp), target :: slv(0:ncheb, lmsize2, 0:ncheb, lmsize2), slv1(0:ncheb, lmsize, 0:ncheb, lmsize), yrll1(0:ncheb, lmsize, lmsize), zrll1(0:ncheb, lmsize, lmsize), &
       yrll2(0:ncheb, lmsize, lmsize), zrll2(0:ncheb, lmsize, lmsize), yrll(0:ncheb, lmsize2, lmsize), zrll(0:ncheb, lmsize2, lmsize), vjlr(lmsize, lmsize2, 0:ncheb), &
       vhlr(lmsize, lmsize2, 0:ncheb), vjlr_yrll1(lmsize, lmsize), vhlr_yrll1(lmsize, lmsize), vjlr_zrll1(lmsize, lmsize), vhlr_zrll1(lmsize, lmsize), yrll1temp(lmsize, lmsize), &
       zrll1temp(lmsize, lmsize)
@@ -328,6 +340,9 @@ contains
 
       nplm = (ncheb+1)*lmsize
 
+      ! Radial solver runs on the CPU (compiled -acc=host) in the MPI+GPU design: the GPU
+      ! is reserved for the big batched k-loop inversion (kkrmat01); the many small local
+      ! solves here are faster on a CPU core and are parallelised across MPI ranks.
       call zgetrf(nplm, nplm, slv1, nplm, ipiv, info)
       call zgetrs('n', nplm, lmsize, slv1, nplm, ipiv, yrll1, nplm, info)
       call zgetrs('n', nplm, lmsize, slv1, nplm, ipiv, zrll1, nplm, info)
